@@ -82,8 +82,6 @@ sudo apt install -y debconf-utils;
 ######################################################################
 echo -e "\e[32minstall uuid\e[0m";
 sudo apt install -y uuid;
->>>>>>> origin/testing
-
 
 ######################################################################
 echo -e "\e[32minstall nfs-kernel-server for pxe\e[0m";
