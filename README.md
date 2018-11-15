@@ -8,7 +8,7 @@ i did not keeped an eye on network security.
 **USE IT AT YOUR OWN RISK.**
 
 ## what is it good for?
-the scripts installs necessary packages to let your RPi act as a DHCP, TFTP, Samba, NFS, HTML, NTP, PXE server.
+the scripts installs necessary packages to let your RPi act as a DHCP, TFTP, Samba, NFS, HTML, Time, PXE server.
 and it will download LiveDVD ISOs you can boot your PXE client (Desktop PC) to.
 
 the script can easely be modified to add additional ISOs or update ISOs if updated ones are available.
@@ -20,11 +20,11 @@ it also is able to act as server for NETWORK BOOTING for a Raspberry Pi 3 (see *
       ╔══════════╗   ╔═══╗       ╔══════╗╔═════════╗
 WAN───╢DSL router╟───╢ s ║       ║RPi-  ╠╣USB-stick║
       ╚══════════╝   ║ w ║       ║PXE-  ║╚═════════╝
-                     ║ i ║       ║server║
-       ╔══════╗      ║ t ╟───eth0╢      ║
-       ║ RPi3 ╟──────╢ c ║       ║      ║
-       ╚══════╝   ┌──╢ h ╟──┐    ║      ║
-                  │  ╚═══╝  │    ╚══════╝
+                     ║ i ║       ║server║        ╔═══════════════════════╗
+       ╔══════╗      ║ t ╟───eth0╢──┬───╟wlan0───╢ PC4 IP:192.168.251.100║
+       ║ RPi3 ╟──────╢ c ║       ║  │NAT║       ╔╩══════════════════════╗╝
+       ╚══════╝   ┌──╢ h ╟──┐    ║  └───╟eth1───╢ PC3 IP:192.168.250.100║
+                  │  ╚═══╝  │    ╚══════╝       ╚═══════════════════════╝
                ╔══╧══╗   ╔══╧══╗
                ║ PC1 ║   ║ PC2 ║
                ╚═════╝   ╚═════╝
@@ -36,6 +36,8 @@ WAN───╢DSL router╟───╢ s ║       ║RPi-  ╠╣USB-stick║
 - SD card (big enough to hold entire ISO images of desired Live DVDs), (e.g. 64GByte)
 - USB memory stick (for preloaded iso images), (e.g. 64GByte)
 - working network environment with a connection to internet
+- optional: second ethernet interface (via USB)
+- optional: built-in WLAN interface (as that one of RPi3, or an external one via USB)
 
 optional, if your SD card is too small or you dont want to have all the server content on the SD card, you can use the USB memory stick to hold all content. for that you have to do small tiny changes on the scripts.
 
@@ -87,21 +89,24 @@ this will download all updated iso files.
 
 ## modifying the script:
 what you should know, when you make modification to the script...<br />
-there are three importent locations for the pxe boot and the pxe menu that must fit. otherwise the pxe menu and the following boot process can not find required files.
-1. the ISO or NFS path relative to the pxe boot menu root path<br />
+there are four importent locations for the pxe boot and the pxe menu that must fit. otherwise the pxe menu and the following boot process can not find required files.
+1. the ISO or NSF path relative to the TFTP root path.<br />
+(on disk `/srv/tftp/iso`, `/srv/tftp/nfs` as symbolik link).
+2. the ISO or NFS path relative to the pxe boot menu root path<br />
 (on disk `/srv/tftp/menu-bios/iso`, `/srv/tftp/menu-bios/iso` as symbolic link).
-2. the ISO or NFS path repative to the nfs root path<br />
-(on disk `/srv/iso`, `/srv/nfs`).
-3. the ISO, IMG or NFS path located at /var/www/html<br />
-(on disk `/var/www/html/iso`, `/var/www/html/img`, `/var/www/html/nfs`).
+3. the ISO or NFS path repative to the nfs root path<br />
+(on disk `/srv/iso`, `/srv/nfs`).<br />
+4. the ISO, IMG or NFS path located at /var/www/html<br />
+(on disk /var/www/html/iso, /var/www/html/img, /var/www/html/nfs).
 ```
 /
 ├── srv
-|   ├── img    (the real physical location of IMG files)
 |   ├── iso    (the real physical location of ISO files)
 |   ├── nfs    (the real physical location of NFS files or mountpoints)
 |   | 
 |   └── tftp       (TFTP root)
+|       ├── iso    (only a symbolic link to ISO files)
+|       ├── nfs    (only a symbolic link to NFS files)
 |       |
 |       └── menu-bios  (PXE boot menu root for BIOS)
 |           ├── iso    (only a symbolic link to ISO files)
@@ -114,15 +119,66 @@ there are three importent locations for the pxe boot and the pxe menu that must 
             ├── iso  (only a symbolic link to ISO files)
             └── nfs  (only a symbolic link to NFS files)
 ```
-
 if you make any changes to your script and/or file stcructure on disk, keep an eye to changes you made and adapt everything to match
 pxe menu entries to file structure on disk.
 
 what the root of TFTP and PXE boot menu are, is defined in the **_dnsmasq_** configuration file `/etc/dnsmasq.d/pxe-server`.<br />
 the root for NFS is defined in `/etc/exports`.<br />
 the root for HTML is defined in the **_lighttpd_** configuration file `/etc/lighttpd/lighttpd.conf`.
-
-
+## mount scenarios for pxe boot:
+### direct readonly mounting content of ISO:
+e.g. ubuntu-lts-x64 iso image<br />
+no problems. pxe boot job can access to required content.
+```
+╔═════════════╗
+║iso-file     ║
+║             ║
+║ ┌───────────╨─┐
+║ │mount loop   │
+║ │             │
+║ │             ├───┤nfs*
+║ │             │
+║ └───────────╥─┘
+╚═════════════╝
+```
+### mounting content of disk image and make content read/writalbe by overlayfs:
+e.g. rpi-raspbian-full<br />
+this disk image contains two partitions. the first is the boot partition and the second is the root parition.
+to make the images read/writable, there is an overlayfs putted on top.<br />
+(lowerdir is the readonly source, upperdir is the writable difference, workdir is an temporarily workfolder for internal use. the mergeddir is the sum of lower + upper. write access happens only on the upperdir with white-out and write-on-modify capability)<br />
+but unfortunately overlayfs can't get exported directly for nfs. so putting a bindfs on top of the overlayfs makes it possible to get exported for nfs.<br />
+and another issue is, overlayfs can't handle **vfat** partitions as source (lowerdir). putting bindfs between makes overlayfs happy.<br />
+**note: this overlayfs+bindfs construction does NOT work reliably - data loss!**
+```
+╔═════════════╗
+║img-file     ║
+║             ║
+║ ┌───────────╨─┐ ┌─────────────┐ ┌─────────────────┐   ┌─────────────┐
+║ │mount loop   │ │mount bindfs │ │mount overlayfs  │   │mount bindfs │
+║ │  vfat       │ │  prepare to │ ├───────┐ ┌───────┴─┐ │  prepage to │
+║ │  boot       ├─┼  overlayfs  ├─┼ lower │ │merged   ├─┼  export nfs ├───┤nfs*
+║ │             │ └─────────────┘ ├───────┘ └───────┬─┘ └─────────────┘
+║ │             │                 │         ┌───────┴─┐
+║ │  vfat       │                 │         │upper    ├─┤diff*
+║ │  can't be   │                 │can't be └───────┬─┘
+║ │  handled    │                 │handled  ┌───────┴─┐
+║ │  by         │                 │by       │work     ├─┤tmp*
+║ │  overlayfs  │                 │exportfs └───────┬─┘
+║ └───────────╥─┘                 └─────────────────┘
+║ ┌───────────╨─┐                 ┌─────────────────┐   ┌─────────────┐
+║ │mount loop   │                 │mount overlayfs  │   │mount bindfs │
+║ │  ext4       │                 ├───────┐ ┌───────┴─┐ │  prepare to │
+║ │  root       ├─────────────────┼ lower │ │merged   ├─┼  export nfs ├───┤nfs*
+║ │             │                 ├───────┘ └───────┬─┘ └─────────────┘
+║ │             │                 │         ┌───────┴─┐
+║ │             │                 │         │upper    ├─┤diff*
+║ │             │                 │can't be └───────┬─┘
+║ │             │                 │handled  ┌───────┴─┐
+║ │             │                 │by       │work     ├─┤tmp*
+║ │             │                 │exportfs └───────┬─┘
+║ └───────────╥─┘                 └─────────────────┘
+╚═════════════╝
+```
 ## note:
 the script will copy/download/mount following ISOs:
 ```
@@ -140,6 +196,7 @@ parrot-full-x64.iso
 parrot-full-x86.iso
 gnuradio-x64.iso      # GNU Radio
 deft-x64.iso          # DEFT
+deftz-x64.iso
 kali-x64.iso          # Kali Linux
 pentoo-x64.iso        # Pentoo Linux
 systemrescue-x86.iso  # System Rescue
@@ -168,6 +225,7 @@ parrot-full-x64.url
 parrot-full-x86.url
 gnuradio-x64.url
 deft-x64.url
+deftz-x64.url
 kali-x64.url
 pentoo-x64.url
 systemrescue-x86.url

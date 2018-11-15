@@ -40,23 +40,24 @@
 # v2018-11-12
 #
 # known issues:
-#
+#    overlayfs can not get exported via nfs
+#    overlayfs is working, when you put a bindfs on top of overlayfs, to make exportfs happy
+#    note: this overlayfs+bindfs construction does NOT work reliably - data loss!
+#    solution: maybe linux kernel 4.16
 
-#bridge#
 
-
-######################################################################
+##########################################################################
 echo -e "\e[36msetup variables\e[0m";
 
-######################################################################
-######################################################################
+##########################################################################
+##########################################################################
 ## variables, you have to customize
 ## e.g.:
 ##  RPI_SN0 : serial number
 ##            of the raspberry pi 3 for network booting
 ##  and other variables...
-######################################################################
-######################################################################
+##########################################################################
+##########################################################################
 CUSTOM_LANG=de
 CUSTOM_LANG_LONG=de_DE
 CUSTOM_LANG_UPPER=DE
@@ -69,21 +70,37 @@ RPI_SN0_BOOT=rpi-$RPI_SN0-boot
 RPI_SN0_ROOT=rpi-$RPI_SN0-root
 ######################################################################
 INTERFACE_ETH0=$(ls /sys/devices/platform/soc/*.usb/usb1/1-1/1-1.1/1-1.1:1.0/net)
-INTERFACE_BR0=br0
-######################################################################
+INTERFACE_ETH1=eth1
+INTERFACE_WLAN0=wlan0
+##########################################################################
 IP_ETH0=$(ip -4 address show dev $INTERFACE_ETH0 | grep -o -E '(([0-9]{1,3}[\.]){3}[0-9]{1,3})' | sed '1!d')
-IP_ETH0_=$(echo $IP_ETH0 | grep -E -o "([0-9]{1,3}[\.]){3}")
+IP_ETH0_=$(echo $IP_ETH0 | grep -o -E '([0-9]{1,3}[\.]){3}')
 IP_ETH0_0=$(echo $(echo $IP_ETH0_)0)
 IP_ETH0_START=$(echo $(echo $IP_ETH0_)200)
 IP_ETH0_END=$(echo $(echo $IP_ETH0_)250)
-IP_ETH0_ROUTER=$(echo $(ip rout show dev $INTERFACE_ETH0 | grep default | cut -d' ' -f3))
+IP_ETH0_ROUTER=$(echo $(ip rout show  dev $INTERFACE_ETH0 | grep default | cut -d' ' -f3))
 IP_ETH0_DNS=$IP_ETH0_ROUTER
 IP_ETH0_MASK=255.255.255.0
-IP_BR0=192.168.250.1
-IP_BR0_START=192.168.250.200
-IP_BR0_END=192.168.250.250
-IP_BR0_MASK=255.255.255.0
-######################################################################
+##########################################################################
+IP_ETH1=192.168.250.1
+IP_ETH1_START=192.168.250.100
+IP_ETH1_END=192.168.250.110
+IP_ETH1_MASK=255.255.255.0
+##########################################################################
+IP_WLAN0=192.168.251.1
+IP_WLAN0_START=192.168.251.100
+IP_WLAN0_END=192.168.251.110
+IP_WLAN0_MASK=255.255.255.0
+##########################################################################
+DRIVER_WLAN0=nl80211
+COUNTRY_WLAN0=$CUSTOM_LANG_UPPER
+PASSWORD_WLAN0=p@ssw0rd
+SSID_WLAN0=wlan0@domain.local
+INTERFACE_WLAN0X=wlan0x
+PASSWORD_WLAN0X=p@ssw0rd
+SSID_WLAN0X=wlan0x@domain.local
+
+##########################################################################
 ISO=/iso
 IMG=/img
 TFTP_ETH0=/tftp
@@ -99,13 +116,17 @@ DST_ISO=$DST_ROOT$ISO
 DST_IMG=$DST_ROOT$IMG
 DST_TFTP_ETH0=$DST_ROOT$TFTP_ETH0
 DST_NFS_ETH0=$DST_ROOT$NFS_ETH0
-######################################################################
+##########################################################################
 DST_PXE_BIOS=menu-bios
 DST_PXE_EFI32=menu-efi32
 DST_PXE_EFI64=menu-efi64
-
+##########################################################################
+KERNEL_MAJOR=$(cat /proc/version | awk '{print $3}' | awk -F . '{print $1}')
+KERNEL_MINOR=$(cat /proc/version | awk '{print $3}' | awk -F . '{print $2}')
+KERNEL_VER=$((KERNEL_MAJOR*100 + KERNEL_MINOR))
 
 echo
+echo -e "$KERNEL_MAJOR.$KERNEL_MINOR \e[36mis kernel version\e[0m";
 echo -e "$INTERFACE_ETH0 \e[36mis used as primary networkadapter for PXE\e[0m";
 echo -e "$IP_ETH0 \e[36mis used as primary IP address for PXE\e[0m";
 echo -e "$RPI_SN0 \e[36mis used as SN for RPi3 network booting\e[0m";
@@ -121,8 +142,8 @@ if [ "$IP_ETH0_ROUTER" == "" ]; then
     exit 1
 fi
 
-sudo umount -f $SRC_MOUNT
-sudo mount $SRC_MOUNT
+sudo umount -f $SRC_MOUNT 2> /dev/null;
+sudo mount $SRC_MOUNT 2> /dev/null;
 
 ##########################################################################
 ##########################################################################
@@ -221,6 +242,16 @@ CLONEZILLA_X86_URL=https://downloads.sourceforge.net/project/clonezilla/clonezil
 FEDORA_X64=fedora-x64
 FEDORA_X64_URL=https://download.fedoraproject.org/pub/fedora/linux/releases/29/Workstation/x86_64/iso/Fedora-Workstation-Live-x86_64-29-1.2.iso
 
+OPENSUSE_X64=opensuse-x64
+OPENSUSE_X64_URL=https://download.opensuse.org/distribution/openSUSE-current/live/openSUSE-Leap-15.0-GNOME-Live-x86_64-Current.iso
+OPENSUSE_RESCUE_X64=opensuse-rescue-x64
+OPENSUSE_RESCUE_X64_URL=https://download.opensuse.org/distribution/openSUSE-current/live/openSUSE-Leap-15.0-Rescue-CD-x86_64-Current.iso
+
+TAILS_X64=tails-x64
+TAILS_X64_URL=https://mirrors.edge.kernel.org/tails/stable/tails-amd64-3.10.1/tails-amd64-3.10.1.iso
+
+CENTOS_X64=centos-x64
+CENTOS_X64_URL=http://ftp.rrzn.uni-hannover.de/centos/7/isos/x86_64/CentOS-7-x86_64-LiveGNOME-1804.iso
 
 ##########################################################################
 ##########################################################################
@@ -236,11 +267,75 @@ PI_CORE_URL=http://tinycorelinux.net/9.x/armv7/releases/RPi/piCore-9.0.3.zip
 
 RPD_LITE=rpi-raspbian-lite
 RPD_LITE_URL=https://downloads.raspberrypi.org/raspbian_lite_latest
-
 RPD_FULL=rpi-raspbian-full
 RPD_FULL_URL=https://downloads.raspberrypi.org/raspbian_latest
 
 
+
+
+##########################################################################
+handle_hostapd() {
+    echo -e "\e[32mhandle_hostapd()\e[0m";
+
+    ######################################################################
+    grep -q mod_install_server /etc/hostapd/hostapd.conf || {
+    echo -e "\e[36m    setup hostapd.conf for wlan access point\e[0m";
+    sudo sh -c "cat << EOF  > /etc/hostapd/hostapd.conf
+########################################
+#/etc/hostapd/hostapd.conf
+## mod_install_server
+interface=$INTERFACE_WLAN0
+driver=$DRIVER_WLAN0
+
+country_code=$COUNTRY_WLAN0
+ieee80211d=1
+
+hw_mode=g
+ieee80211n=1
+channel=7
+
+wmm_enabled=1
+
+##
+ssid=$SSID_WLAN0
+ignore_broadcast_ssid=0
+macaddr_acl=0
+auth_algs=1
+wpa=2
+wpa_key_mgmt=WPA-PSK
+wpa_pairwise=TKIP
+rsn_pairwise=CCMP
+#wpa_passphrase=$PASSWORD_WLAN0
+wpa_psk=$(wpa_passphrase $SSID_WLAN0 $PASSWORD_WLAN0 | grep '[[:blank:]]psk' | cut -d = -f2)
+
+## optional: create virtual wlan adapter
+#bss=$INTERFACE_WLAN0X
+#ssid=$SSID_WLAN0X
+#ignore_broadcast_ssid=0
+#macaddr_acl=0
+#auth_algs=1
+#wpa=2
+#wpa_key_mgmt=WPA-PSK
+#wpa_pairwise=TKIP
+#rsn_pairwise=CCMP
+##wpa_passphrase=$PASSWORD_WLAN0X
+#wpa_psk=$(wpa_passphrase $SSID_WLAN0X $PASSWORD_WLAN0X | grep '[[:blank:]]psk' | cut -d = -f2)
+EOF";
+    }
+
+    ######################################################################
+    grep -q mod_install_server /etc/default/hostapd || {
+    echo -e "\e[36m    setup hostapd for wlan access point\e[0m";
+    sudo sh -c "cat << EOF  > /etc/default/hostapd
+########################################
+#/etc/default/hostapd
+## mod_install_server
+DAEMON_CONF=\"/etc/hostapd/hostapd.conf\"
+EOF";
+    }
+
+    sudo systemctl restart hostapd.service;
+}
 
 
 ##########################################################################
@@ -250,8 +345,8 @@ handle_dhcpcd() {
     ######################################################################
     if grep -q stretch /etc/*-release; then
         echo -e "\e[36m    a stretch os detected\e[0m";
-        ######################################################################
-        grep -q $INTERFACE_ETH0 /etc/dhcpcd.conf || {
+        ##################################################################
+        grep -q mod_install_server /etc/dhcpcd.conf || {
         echo -e "\e[36m    setup dhcpcd.conf\e[0m";
         sudo sh -c "cat << EOF  >> /etc/dhcpcd.conf
 ########################################
@@ -260,13 +355,25 @@ interface $INTERFACE_ETH0
 static ip_address=$IP_ETH0/24
 static routers=$IP_ETH0_ROUTER
 static domain_name_servers=$IP_ETH0_ROUTER
+
+########################################
+interface $INTERFACE_ETH1
+static ip_address=$IP_ETH1/24
+static routers=$IP_ETH1_ROUTER
+static domain_name_servers=$IP_ETH1_ROUTER
+
+########################################
+interface $INTERFACE_WLAN0
+static ip_address=$IP_WLAN0/24
+static routers=$IP_WLAN0_ROUTER
+static domain_name_servers=$IP_WLAN0_ROUTER
 EOF";
         sudo systemctl daemon-reload;
         sudo systemctl restart dhcpcd.service;
         }
     else
         echo -e "\e[36m    a non-stretch os detected\e[0m";
-        ######################################################################
+        ##################################################################
         grep -q mod_install_server /etc/network/interfaces || {
         echo -e "\e[36m    setup networking, disable dhcpcd\e[0m";
         sudo sh -c "cat << EOF  > /etc/network/interfaces
@@ -297,12 +404,20 @@ iface $INTERFACE_ETH0 inet static
     netmask $IP_ETH0_MASK
     gateway $IP_ETH0_ROUTER
 
-#bridge#auto eth1
-#bridge#iface eth1 inet static
-#bridge#    hwaddress 88:88:88:11:11:11
-#bridge#    address 169.254.11.11
-#bridge#    netmask 255.255.0.0
-#bridge#
+auto $INTERFACE_ETH1
+iface $INTERFACE_ETH1 inet static
+    address $IP_ETH1
+    netmask $IP_ETH1_MASK
+    gateway $IP_ETH1_ROUTER
+    hwaddress 88:88:88:11:11:11
+
+auto $INTERFACE_WLAN0
+iface $INTERFACE_WLAN0 inet static
+    address $IP_WLAN0
+    netmask $IP_WLAN0_MASK
+    gateway $IP_WLAN0_ROUTER
+    hwaddress 88:88:88:22:22:22
+
 #bridge#auto br0
 #bridge#iface br0 inet static
 #bridge#    bridge_ports eth1 wlan0 wlan1
@@ -324,7 +439,7 @@ EOF";
 }
 
 
-######################################################################
+##########################################################################
 handle_dnsmasq() {
     echo -e "\e[32mhandle_dnsmasq()\e[0m";
 
@@ -334,15 +449,20 @@ handle_dnsmasq() {
     sudo sh -c "cat << EOF  >> /etc/dnsmasq.d/pxe-server
 ########################################
 #/etc/dnsmasq.d/pxeboot
-
 ## mod_install_server
 
 log-dhcp
-log-queries
+#log-queries
 
 # interface selection
 interface=$INTERFACE_ETH0
-#bridge#interface=$INTERFACE_BR0
+interface=$INTERFACE_ETH1
+interface=$INTERFACE_WLAN0
+
+#
+bind-dynamic
+domain-needed
+bogus-priv
 
 # NTP Server
 dhcp-option=$INTERFACE_ETH0, option:ntp-server, 0.0.0.0
@@ -352,14 +472,32 @@ dhcp-option=$INTERFACE_ETH0, option:ntp-server, 0.0.0.0
 enable-tftp
 tftp-lowercase
 tftp-root=$DST_TFTP_ETH0/, $INTERFACE_ETH0
-#bridge#tftp-root=$DST_TFTP_ETH0_BR0/, $INTERFACE_BR0
+dhcp-option=$INTERFACE_ETH0, option:tftp-server, 0.0.0.0
+
+#
+dhcp-option=$INTERFACE_ETH1, option:nis-domain, eth-nis
+dhcp-option=$INTERFACE_ETH1, option:domain-name, eth-domain.local
+dhcp-option=$INTERFACE_WLAN0, option:nis-domain, wlan-nis
+dhcp-option=$INTERFACE_WLAN0, option:domain-name, wlan-domain.local
+
+# Time Server
+dhcp-option=$INTERFACE_ETH0, option:ntp-server, 0.0.0.0
+dhcp-option=$INTERFACE_ETH1, option:ntp-server, 0.0.0.0
+dhcp-option=$INTERFACE_WLAN0, option:ntp-server, 0.0.0.0
 
 # DHCP
 # do not give IPs that are in pool of DSL routers DHCP
 dhcp-range=$INTERFACE_ETH0, $IP_ETH0_START, $IP_ETH0_END, 24h
-#bridge#dhcp-range=$INTERFACE_BR0, $IP_BR0_START, $IP_BR0_END, 24h
-dhcp-option=$INTERFACE_ETH0, option:tftp-server, $IP_ETH0
-#bridge#dhcp-option=$INTERFACE_BR0, option:tftp-server, $IP_BR0
+dhcp-range=$INTERFACE_ETH1, $IP_ETH1_START, $IP_ETH1_END, 24h
+dhcp-range=$INTERFACE_WLAN0, $IP_WLAN0_START, $IP_WLAN0_END, 24h
+
+# some examples for pre-defined static IPs by MAC or by name
+#dhcp-host=$INTERFACE_ETH0, 11:11:11:11:11:11,  192.168.0.100
+#dhcp-host=$INTERFACE_ETH0, MySmartHome, 192.168.0.101
+#dhcp-host=$INTERFACE_ETH1, 22:22:22:22:22:22,  192.168.250.100
+#dhcp-host=$INTERFACE_ETH1, MySmartTV, 192.168.250.101
+#dhcp-host=$INTERFACE_WLAN0, 33:33:33:33:33:33, 192.168.251.100
+#dhcp-host=$INTERFACE_WLAN0, MySmartPhone, 192.168.251.101
 
 # DNS (enabled)
 port=53
@@ -373,72 +511,114 @@ dhcp-match=set:ARCH_0, option:client-arch, 0
 dhcp-match=set:x86_UEFI, option:client-arch, 6
 dhcp-match=set:x64_UEFI, option:client-arch, 7
 dhcp-match=set:x64_UEFI, option:client-arch, 9
+#dhcp-match=set:iPXE, option:user-class, iPXE
 
 # test if it is a RPi3 or a regular x86PC
 tag-if=set:ARM_RPI3, tag:ARCH_0, tag:UUID_RPI3
 tag-if=set:x86_BIOS, tag:ARCH_0, tag:!UUID_RPI3
+#tag-if=set:x86_BIOS, tag:ARCH_0, tag:!UUID_RPI3, tag:!iPXE
+#tag-if=set:x86_iPXE, tag:ARCH_0, tag:!UUID_RPI3, tag:iPXE
+#tag-if=set:UEFI_iPXE, tag:!ARCH_0, tag:!UUID_RPI3, tag:iPXE
 
 pxe-service=tag:ARM_RPI3,0, \"Raspberry Pi Boot   \", bootcode.bin
 pxe-service=tag:x86_BIOS,x86PC, \"PXE Boot Menu (BIOS 00:00)\", $DST_PXE_BIOS/lpxelinux
 pxe-service=6, \"PXE Boot Menu (UEFI 00:06)\", $DST_PXE_EFI32/syslinux.efi
 pxe-service=x86-64_EFI, \"PXE Boot Menu (UEFI 00:07)\", $DST_PXE_EFI64/syslinux.efi
 pxe-service=9, \"PXE Boot Menu (UEFI 00:09)\", $DST_PXE_EFI64/syslinux.efi
+#pxe-service=tag:x86_iPXE,x86PC, \"iPXE Boot Menu (iPXE 00:00)\", undionly.kpxe
+#pxe-service=tag:UEFI_iPXE,x86PC, \"iPXE Boot Menu (iPXE UEFI)\", ipxe.efi
 
 dhcp-boot=tag:ARM_RPI3, bootcode.bin
 dhcp-boot=tag:x86_BIOS, $DST_PXE_BIOS/lpxelinux.0
 dhcp-boot=tag:x86_UEFI, $DST_PXE_EFI32/syslinux.efi
 dhcp-boot=tag:x64_UEFI, $DST_PXE_EFI64/syslinux.efi
+#dhcp-boot=tag:x86_iPXE, http://$(hostname)/real_boot_script.php
+#dhcp-boot=tag:x86_iPXE, undionly.kpxe
+#dhcp-boot=tag:UEFI_iPXE, ipxe.efi
+#dhcp-option=iPXE, 175, 8:1:1
 EOF";
     sudo systemctl restart dnsmasq.service;
     }
 }
 
 
-######################################################################
+##########################################################################
 handle_samba() {
     echo -e "\e[32mhandle_samba()\e[0m";
 
     ######################################################################
     grep -q mod_install_server /etc/samba/smb.conf 2> /dev/null || ( \
     echo -e "\e[36m    setup samba\e[0m";
-    sudo sed -i /etc/samba/smb.conf -n -e "1,/#======================= Share Definitions =======================/p";
-    sudo sh -c "cat << EOF  >> /etc/samba/smb.conf
+    #sudo sed -i /etc/samba/smb.conf -n -e "1,/#======================= Share Definitions =======================/p";
+    sudo sh -c "cat << EOF  > /etc/samba/smb.conf
+########################################
+## mod_install_server
+#======================= Global Settings =======================
 [global]
+
+## Browsing/Identification ###
+   workgroup = WORKGROUP
+dns proxy = yes
+enhanced browsing = no
+
+#### Networking ####
+interfaces = $IP_ETH0_0/24 $INTERFACE_ETH0
+bind interfaces only = yes
+
+#### Debugging/Accounting ####
+   log file = /var/log/samba/log.%m
+   max log size = 1000
+   syslog = 0
+   panic action = /usr/share/samba/panic-action %d
+
+####### Authentication #######
+   server role = standalone server
+   passdb backend = tdbsam
+   obey pam restrictions = yes
+   unix password sync = yes
+   passwd program = /usr/bin/passwd %u
+   passwd chat = *Enter\snew\s*\spassword:* %n\n *Retype\snew\s*\spassword:* %n\n *password\supdated\ssuccessfully* .
+   pam password change = yes
+   map to guest = bad user
+
+########## Domains ###########
+
+############ Misc ############
+   usershare allow guests = yes
+
 # https://www.samba.org/samba/security/CVE-2017-14746.html
 server min protocol = SMB2
 
-########################################
-## mod_install_server
-
+#======================= Share Definitions =======================
 [srv]
+    path = $DST_ROOT
     comment = /srv folder of pxe-server
-    path = $DST_ROOT/
-    public = yes
-    only guest = yes
-    browseable = yes
+    guest ok = yes
+    guest only = yes
+    browseable = no
     read only = no
-    writeable = yes
     create mask = 0644
     directory mask = 0755
     force create mode = 0644
     force directory mode = 0755
     force user = root
     force group = root
+    hide dot files = no
 
 [media]
-    comment = /media folder of pxe-server
     path = /media/
-    public = yes
-    only guest = yes
-    browseable = yes
+    comment = /media folder of pxe-server
+    guest ok = yes
+    guest only = yes
+    browseable = no
     read only = no
-    writeable = yes
     create mask = 0644
     directory mask = 0755
     force create mode = 0644
     force directory mode = 0755
     force user = root
     force group = root
+    hide dot files = no
 EOF"
     sudo systemctl restart smbd.service;
     )
@@ -497,6 +677,13 @@ handle_pxe_menu() {
     ## The entry before -- means that it will be used by the live system / the installer
     ## The entry after -- means that it will be carried to and used by the installed system
     ## https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/Documentation/admin-guide/kernel-parameters.txt
+    ##
+    ## some debian/ubuntu parameter
+    ## https://www.debian.org/releases/stretch/example-preseed.txt
+    ## https://www.debian.org/releases/stretch/amd64/apb.html.en
+    ## https://www.debian.org/releases/stretch/amd64/ch05s03.html.en
+    ## https://manpages.debian.org/stretch/live-config-doc/live-config.7.en.html
+    ## http://manpages.ubuntu.com/manpages/precise/man7/live-config.7.html
     ######################################################################
     echo -e "\e[32mhandle_pxe_menu(\e[0m$1\e[32m)\e[0m";
     echo -e "\e[36m    setup sys menu for pxe\e[0m";
@@ -1186,6 +1373,193 @@ EOF";
     fi
 }
 
+    if [ -f "$FILE_MENU" ] \
+    && [ -f "$DST_NFS_ETH0/$OPENSUSE_X64/boot/x86_64/loader/linux" ]; then
+        echo  -e "\e[36m    add $OPENSUSE_X64\e[0m";
+        sudo sh -c "cat << EOF  >> $FILE_MENU
+########################################
+## INFO: Booting live images
+##           https://mirrors.edge.kernel.org/pub/linux/utils/boot/dracut/dracut.html#dracutconf5
+##       Bug 1099548 - can't PXE-boot into openSUSE Leap 15.0 Live image
+##           https://bugzilla.opensuse.org/show_bug.cgi?id=1099548
+LABEL $OPENSUSE_X64
+    MENU LABEL openSUSE Leap x64
+    KERNEL $FILE_BASE$NFS_ETH0/$OPENSUSE_X64/boot/x86_64/loader/linux
+    INITRD $FILE_BASE$NFS_ETH0/$OPENSUSE_X64/boot/x86_64/loader/initrd
+    APPEND root=live:nfs://$IP_ETH0$DST_NFS_ETH0/$OPENSUSE_X64/LiveOS/squashfs.img ro rd.live.image
+#    APPEND root=live:http://$IP_ETH0$NFS_ETH0/$OPENSUSE_X64/LiveOS/squashfs.img ro rd.live.image
+#    APPEND root=live:tftp://$IP_ETH0$NFS_ETH0/$OPENSUSE_X64/LiveOS/squashfs.img ro rd.live.image rd.shell rd.debug --
+    TEXT HELP
+        Boot to openSUSE Leap Live
+        User: liveuser
+    ENDTEXT
+EOF";
+    fi
+
+    if [ -f "$FILE_MENU" ] \
+    && [ -f "$DST_NFS_ETH0/$OPENSUSE_RESCUE_X64/boot/x86_64/loader/linux" ]; then
+        echo  -e "\e[36m    add $OPENSUSE_RESCUE_X64\e[0m";
+        sudo sh -c "cat << EOF  >> $FILE_MENU
+########################################
+LABEL $OPENSUSE_RESCUE_X64
+    MENU LABEL openSUSE Leap Rescue x64
+    KERNEL $FILE_BASE$NFS_ETH0/$OPENSUSE_RESCUE_X64/boot/x86_64/loader/linux
+    INITRD $FILE_BASE$NFS_ETH0/$OPENSUSE_RESCUE_X64/boot/x86_64/loader/initrd
+    APPEND root=live:nfs://$IP_ETH0$DST_NFS_ETH0/$OPENSUSE_RESCUE_X64/LiveOS/squashfs.img ro rd.live.image rd.live.overlay.persistent rd.live.overlay.cowfs=ext4 showopts -- 
+#    APPEND root=live:http://$IP_ETH0$NFS_ETH0/$OPENSUSE_RESCUE_X64/LiveOS/squashfs.img ro rd.live.image rd.live.overlay.persistent rd.live.overlay.cowfs=ext4 showopts -- 
+#    APPEND root=live:tftp://$IP_ETH0$NFS_ETH0/$OPENSUSE_RESCUE_X64/LiveOS/squashfs.img ro rd.live.image rd.live.overlay.persistent rd.live.overlay.cowfs=ext4 showopts -- vconsole.font=latarcyrheb-sun16 vconsole.keymap=$CUSTOM_LANG_EXT locale.LANG=$CUSTOM_LANG_LONG.UTF-8
+    TEXT HELP
+        Boot to openSUSE Leap Rescue Live
+        User: liveuser
+    ENDTEXT
+EOF";
+    fi
+
+    if [ -f "$FILE_MENU" ] \
+    && [ -f "$DST_NFS_ETH0/$CENTOS_X64/isolinux/vmlinuz0" ]; then
+        echo  -e "\e[36m    add $CENTOS_X64\e[0m";
+        sudo sh -c "cat << EOF  >> $FILE_MENU
+########################################
+## INFO: http://people.redhat.com/harald/dracut.html#dracut.kernel
+##       https://access.redhat.com/documentation/en-us/red_hat_enterprise_linux/7/html/installation_guide/chap-installation-server-setup
+##       https://github.com/haraldh/dracut/blob/master/dracut.cmdline.7.asc
+## NOT WORKING
+LABEL $CENTOS_X64
+    MENU LABEL CentOS x64
+    KERNEL $FILE_BASE$NFS_ETH0/$CENTOS_X64/isolinux/vmlinuz0
+    INITRD $FILE_BASE$NFS_ETH0/$CENTOS_X64/isolinux/initrd0.img
+    #APPEND root=live:nfs:$IP_ETH0$DST_NFS_ETH0/$CENTOS_X64 ro rootfstype=auto rd.live.image rhgb rd.lvm=0 rd.luks=0 rd.md=0 rd.dm=0 rd.shell rd.break console=tty0 loglevel=7 vga=794 -- vconsole.font=latarcyrheb-sun16 vconsole.keymap=$CUSTOM_LANG_EXT locale.LANG=$CUSTOM_LANG_LONG.UTF-8
+
+# dracut: FATAL: Don't know how to handle 'root=live:nfs:$IP_ETH0:$DST_NFS_ETH0/$CENTOS_X64';
+    #APPEND root=live:nfs:$IP_ETH0:$DST_NFS_ETH0/$CENTOS_X64 ro root-path=/LiveOS/squashfs.img rootfstype=squashfs rd.live.image rd.live.ram=1 rd.live.overlay=none rd.luks=0 rd.md=0 rd.dm=0 vga=794 rd.shell log_buf_len=1M rd.retry=10 -- vconsole.font=latarcyrheb-sun16 vconsole.keymap=$CUSTOM_LANG_EXT locale.LANG=$CUSTOM_LANG_LONG.UTF-8
+
+# dracut: FATAL: Don't know how to handle 'root=live:nfs:$IP_ETH0:$DST_NFS_ETH0/$CENTOS_X64/LiveOS/squashfs.img';
+    #APPEND root=live:nfs:$IP_ETH0:$DST_NFS_ETH0/$CENTOS_X64/LiveOS/squashfs.img ro rootfstype=squashfs rd.live.image rd.live.ram=1 rd.live.overlay=none rd.luks=0 rd.md=0 rd.dm=0 vga=794 rd.shell log_buf_len=1M rd.retry=10 -- vconsole.font=latarcyrheb-sun16 vconsole.keymap=$CUSTOM_LANG_EXT locale.LANG=$CUSTOM_LANG_LONG.UTF-8
+
+# mount.nfs: mountpoint /sysroot is not a directory
+    #APPEND root=nfs:$IP_ETH0:$DST_NFS_ETH0/$CENTOS_X64/LiveOS/squashfs.img ro root-path=/LiveOS/squashfs.img rootfstype=squashfs rd.live.image rd.live.ram=1 rd.live.overlay=none rd.luks=0 rd.md=0 rd.dm=0 vga=794 rd.shell log_buf_len=1M rd.retry=10 -- vconsole.font=latarcyrheb-sun16 vconsole.keymap=$CUSTOM_LANG_EXT locale.LANG=$CUSTOM_LANG_LONG.UTF-8
+
+# Warning: Could not boot.
+    # Warning: /dev/mapper/live-rw does not exist
+    # Starting Dracut Emergency Shell
+    APPEND root=nfs:$IP_ETH0:$DST_NFS_ETH0/$CENTOS_X64 ro root-path=/LiveOS/squashfs.img rootfstype=squashfs rd.live.image rd.live.ram=1 rd.live.overlay=none rd.luks=0 rd.md=0 rd.dm=0 vga=794 rd.shell log_buf_len=1M rd.retry=10 -- vconsole.font=latarcyrheb-sun16 vconsole.keymap=$CUSTOM_LANG_EXT locale.LANG=$CUSTOM_LANG_LONG.UTF-8
+
+    TEXT HELP
+        Boot to CentOS LiveGNOME
+        User: liveuser
+    ENDTEXT
+EOF";
+    fi
+
+    if [ -f "$FILE_MENU" ] \
+    && [ -f "$DST_NFS_ETH0/$TAILS_X64/live/vmlinuz" ]; then
+        echo  -e "\e[36m    add $TAILS_X64\e[0m";
+        sudo sh -c "cat << EOF  >> $FILE_MENU
+########################################
+## INFO: https://www.com-magazin.de/praxis/nas/multi-boot-nas-server-232864.html?page=10_tails-vom-nas-booten
+## NOT WORKING
+LABEL $TAILS_X64
+    MENU LABEL Tails x64
+    KERNEL $FILE_BASE$NFS_ETH0/$TAILS_X64/live/vmlinuz
+    INITRD $FILE_BASE$NFS_ETH0/$TAILS_X64/live/initrd.img
+    #APPEND nfsroot=$IP_ETH0:$DST_NFS_ETH0/$TAILS_X64 ro netboot=nfs boot=live config loglevel=7 -- break locales=$CUSTOM_LANG_LONG.UTF-8 keyboard-layouts=$CUSTOM_LANG
+    APPEND fetch=$IP_ETH0:$DST_NFS_ETH0/$TAILS_X64/live/filesystem.squashfs ro boot=live config live-media=removable nopersistent noprompt timezone=Etc/UTC block.events_dfl_poll_msecs=1000 nox11autologin module=Tails -- break locales=$CUSTOM_LANG_LONG.UTF-8 keyboard-layouts=$CUSTOM_LANG
+    TEXT HELP
+        Boot to Tails x64 Live (modprobe r8169; exit)
+    ENDTEXT
+EOF";
+    fi
+}
+
+
+##########################################################################
+handle_pxe() {
+    echo -e "\e[32mhandle_pxe()\e[0m";
+
+    ######################################################################
+    [ -d "$DST_TFTP_ETH0/$DST_PXE_BIOS" ]            || sudo mkdir -p $DST_TFTP_ETH0/$DST_PXE_BIOS;
+    if [ -d "$SRC_TFTP_ETH0" ]; then
+        echo -e "\e[36m    copy win-pe stuff\e[0m";
+        if ! [ -f "$DST_TFTP_ETH0/$DST_PXE_BIOS/pxeboot.n12" ] && [ -f "$SRC_TFTP_ETH0/pxeboot.n12" ]; then sudo rsync -xa --info=progress2 $SRC_TFTP_ETH0/pxeboot.n12  $DST_TFTP_ETH0/$DST_PXE_BIOS/; fi
+        if ! [ -f "$DST_TFTP_ETH0/bootmgr.exe" ] && [ -f "$SRC_TFTP_ETH0/bootmgr.exe" ]; then sudo rsync -xa --info=progress2 $SRC_TFTP_ETH0/bootmgr.exe  $DST_TFTP_ETH0/; fi
+        if ! [ -d "$DST_TFTP_ETH0/boot" ] && [ -d "$SRC_TFTP_ETH0/boot" ]; then sudo rsync -xa --info=progress2 $SRC_TFTP_ETH0/boot  $DST_TFTP_ETH0/; fi
+    fi
+    [ -h "$DST_TFTP_ETH0/sources" ]                  || sudo ln -s $DST_NFS_ETH0/$WIN_PE_X86/sources/  $DST_TFTP_ETH0/sources;
+    #for SRC in `find /srv/tftp/Boot -depth`
+    #do
+    #    DST=`dirname "${SRC}"`/`basename "${SRC}" | tr '[A-Z]' '[a-z]'`
+    #    if [ "${SRC}" != "${DST}" ]
+    #    then
+    #        [ ! -e "${DST}" ] && sudo mv -T "${SRC}" "${DST}" || echo "${SRC} was not renamed"
+    #    fi
+    #done
+
+
+    ######################################################################
+    echo -e "\e[36m    setup sys menu files for pxe bios\e[0m";
+    [ -d "$DST_TFTP_ETH0/$DST_PXE_BIOS" ]              || sudo mkdir -p $DST_TFTP_ETH0/$DST_PXE_BIOS;
+    [ -h "$DST_TFTP_ETH0/$DST_PXE_BIOS/lpxelinux.0" ]  || sudo ln -s /usr/lib/PXELINUX/lpxelinux.0                $DST_TFTP_ETH0/$DST_PXE_BIOS/;
+    [ -h "$DST_TFTP_ETH0/$DST_PXE_BIOS/ldlinux.c32" ]  || sudo ln -s /usr/lib/syslinux/modules/bios/ldlinux.c32   $DST_TFTP_ETH0/$DST_PXE_BIOS/;
+    [ -h "$DST_TFTP_ETH0/$DST_PXE_BIOS/vesamenu.c32" ] || sudo ln -s /usr/lib/syslinux/modules/bios/vesamenu.c32  $DST_TFTP_ETH0/$DST_PXE_BIOS/;
+    [ -h "$DST_TFTP_ETH0/$DST_PXE_BIOS/libcom32.c32" ] || sudo ln -s /usr/lib/syslinux/modules/bios/libcom32.c32  $DST_TFTP_ETH0/$DST_PXE_BIOS/;
+    [ -h "$DST_TFTP_ETH0/$DST_PXE_BIOS/libutil.c32" ]  || sudo ln -s /usr/lib/syslinux/modules/bios/libutil.c32   $DST_TFTP_ETH0/$DST_PXE_BIOS/;
+    [ -h "$DST_TFTP_ETH0/$DST_PXE_BIOS/reboot.c32" ]   || sudo ln -s /usr/lib/syslinux/modules/bios/reboot.c32    $DST_TFTP_ETH0/$DST_PXE_BIOS/;
+    [ -h "$DST_TFTP_ETH0/$DST_PXE_BIOS/poweroff.c32" ] || sudo ln -s /usr/lib/syslinux/modules/bios/poweroff.c32  $DST_TFTP_ETH0/$DST_PXE_BIOS/;
+    [ -h "$DST_TFTP_ETH0/$DST_PXE_BIOS/memdisk" ]      || sudo ln -s /usr/lib/syslinux/memdisk                    $DST_TFTP_ETH0/$DST_PXE_BIOS/;
+    [ -h "$DST_TFTP_ETH0/$DST_PXE_BIOS/nfs" ]          || sudo ln -s $DST_NFS_ETH0/                               $DST_TFTP_ETH0/$DST_PXE_BIOS/nfs;
+    [ -h "$DST_TFTP_ETH0/$DST_PXE_BIOS/iso" ]          || sudo ln -s $DST_ISO/                                    $DST_TFTP_ETH0/$DST_PXE_BIOS/iso;
+    handle_pxe_menu  $DST_PXE_BIOS  default;
+
+    ######################################################################
+    echo -e "\e[36m    setup sys menu files for pxe efi32\e[0m";
+    [ -d "$DST_TFTP_ETH0/$DST_PXE_EFI32" ]              || sudo mkdir -p $DST_TFTP_ETH0/$DST_PXE_EFI32;
+    [ -h "$DST_TFTP_ETH0/$DST_PXE_EFI32/syslinux.efi" ] || sudo ln -s /usr/lib/SYSLINUX.EFI/efi32/syslinux.efi      $DST_TFTP_ETH0/$DST_PXE_EFI32/;
+    [ -h "$DST_TFTP_ETH0/$DST_PXE_EFI32/ldlinux.e32" ]  || sudo ln -s /usr/lib/syslinux/modules/efi32/ldlinux.e32   $DST_TFTP_ETH0/$DST_PXE_EFI32/;
+    [ -h "$DST_TFTP_ETH0/$DST_PXE_EFI32/vesamenu.c32" ] || sudo ln -s /usr/lib/syslinux/modules/efi32/vesamenu.c32  $DST_TFTP_ETH0/$DST_PXE_EFI32/;
+    [ -h "$DST_TFTP_ETH0/$DST_PXE_EFI32/libcom32.c32" ] || sudo ln -s /usr/lib/syslinux/modules/efi32/libcom32.c32  $DST_TFTP_ETH0/$DST_PXE_EFI32/;
+    [ -h "$DST_TFTP_ETH0/$DST_PXE_EFI32/libutil.c32" ]  || sudo ln -s /usr/lib/syslinux/modules/efi32/libutil.c32   $DST_TFTP_ETH0/$DST_PXE_EFI32/;
+    [ -h "$DST_TFTP_ETH0/$DST_PXE_EFI32/reboot.c32" ]   || sudo ln -s /usr/lib/syslinux/modules/efi32/reboot.c32    $DST_TFTP_ETH0/$DST_PXE_EFI32/;
+    [ -h "$DST_TFTP_ETH0/$DST_PXE_EFI32/poweroff.c32" ] || sudo ln -s /usr/lib/syslinux/modules/efi32/poweroff.c32  $DST_TFTP_ETH0/$DST_PXE_EFI32/;
+    [ -h "$DST_TFTP_ETH0/$DST_PXE_EFI32/nfs" ]          || sudo ln -s $DST_NFS_ETH0/                                $DST_TFTP_ETH0/$DST_PXE_EFI32/nfs;
+    [ -h "$DST_TFTP_ETH0/$DST_PXE_EFI32/iso" ]          || sudo ln -s $DST_ISO/                                     $DST_TFTP_ETH0/$DST_PXE_EFI32/iso;
+    handle_pxe_menu  $DST_PXE_EFI32  default;
+
+    ######################################################################
+    echo -e "\e[36m    setup sys menu files for pxe efi64\e[0m";
+    [ -d "$DST_TFTP_ETH0/$DST_PXE_EFI64" ]              || sudo mkdir -p $DST_TFTP_ETH0/$DST_PXE_EFI64;
+    [ -h "$DST_TFTP_ETH0/$DST_PXE_EFI64/syslinux.efi" ] || sudo ln -s /usr/lib/SYSLINUX.EFI/efi64/syslinux.efi      $DST_TFTP_ETH0/$DST_PXE_EFI64/;
+    [ -h "$DST_TFTP_ETH0/$DST_PXE_EFI64/ldlinux.e64" ]  || sudo ln -s /usr/lib/syslinux/modules/efi64/ldlinux.e64   $DST_TFTP_ETH0/$DST_PXE_EFI64/;
+    [ -h "$DST_TFTP_ETH0/$DST_PXE_EFI64/vesamenu.c32" ] || sudo ln -s /usr/lib/syslinux/modules/efi64/vesamenu.c32  $DST_TFTP_ETH0/$DST_PXE_EFI64/;
+    [ -h "$DST_TFTP_ETH0/$DST_PXE_EFI64/libcom32.c32" ] || sudo ln -s /usr/lib/syslinux/modules/efi64/libcom32.c32  $DST_TFTP_ETH0/$DST_PXE_EFI64/;
+    [ -h "$DST_TFTP_ETH0/$DST_PXE_EFI64/libutil.c32" ]  || sudo ln -s /usr/lib/syslinux/modules/efi64/libutil.c32   $DST_TFTP_ETH0/$DST_PXE_EFI64/;
+    [ -h "$DST_TFTP_ETH0/$DST_PXE_EFI64/reboot.c32" ]   || sudo ln -s /usr/lib/syslinux/modules/efi64/reboot.c32    $DST_TFTP_ETH0/$DST_PXE_EFI64/;
+    [ -h "$DST_TFTP_ETH0/$DST_PXE_EFI64/poweroff.c32" ] || sudo ln -s /usr/lib/syslinux/modules/efi64/poweroff.c32  $DST_TFTP_ETH0/$DST_PXE_EFI64/;
+    [ -h "$DST_TFTP_ETH0/$DST_PXE_EFI64/nfs" ]          || sudo ln -s $DST_NFS_ETH0/                                $DST_TFTP_ETH0/$DST_PXE_EFI64/nfs;
+    [ -h "$DST_TFTP_ETH0/$DST_PXE_EFI64/iso" ]          || sudo ln -s $DST_ISO/                                     $DST_TFTP_ETH0/$DST_PXE_EFI64/iso;
+    handle_pxe_menu  $DST_PXE_EFI64  default;
+}
+
+
+##########################################################################
+handle_ipxe() {
+    echo -e "\e[32mhandle_ipxe()\e[0m";
+
+    ######################################################################
+    # http://ipxe.org/docs
+    # http://ipxe.org/howto/chainloading
+
+    ######################################################################
+    if [ -d "$SRC_TFTP_ETH0" ]; then
+        echo -e "\e[36m    copy iPXE stuff\e[0m";
+        if ! [ -f "$DST_TFTP_ETH0/undionly.kpxe" ] && [ -f "$SRC_TFTP_ETH0/undionly.kpxe" ]; then sudo rsync -xa --info=progress2 $SRC_TFTP_ETH0/undionly.kpxe  $DST_TFTP_ETH0/; fi
+        if ! [ -f "$DST_TFTP_ETH0/ipxe.efi" ] && [ -f "$SRC_TFTP_ETH0/ipxe.efi" ]; then sudo rsync -xa --info=progress2 $SRC_TFTP_ETH0/ipxe.efi  $DST_TFTP_ETH0/; fi
+    else
+        echo -e "\e[36m    download iPXE stuff\e[0m";
+        sudo wget -O $DST_TFTP_ETH0/undionly.kpxe  https://boot.ipxe.org/undionly.kpxe;
+        sudo wget -O $DST_TFTP_ETH0/ipxe.efi  https://boot.ipxe.org/ipxe.efi;
+    fi
+}
+
 
 ##########################################################################
 compare_last_modification_time() {
@@ -1236,6 +1610,7 @@ handle_iso() {
 
     sudo exportfs -u *:$DST_NFS_ETH0/$NAME 2> /dev/null;
     sudo umount -f $DST_NFS_ETH0/$NAME 2> /dev/null;
+    if [ "$3" == "bindfs" ]; then sudo umount -f $DST_ORIGINAL 2> /dev/null; fi
 
     if [ "$URL" == "" ]; then
         if ! [ -f "$DST_ISO/$FILE_ISO" ] \
@@ -1279,12 +1654,24 @@ handle_iso() {
             sudo mkdir -p $DST_NFS_ETH0/$NAME;
         fi
 
+        if ! [ -d "$DST_ORIGINAL" ]; then
+            if [ "$3" == "bindfs" ]; then
+                echo -e "\e[36m    create nfs folder\e[0m";
+                sudo mkdir -p $DST_ORIGINAL;
+            fi
+        fi
+
         if ! grep -q "$DST_NFS_ETH0/$NAME" /etc/fstab; then
             echo -e "\e[36m    add iso image to fstab\e[0m";
-            if [ "$3" == "timestamping" ]; then
-                sudo sh -c "echo '$DST_ISO/$FILE_ISO  $DST_NFS_ETH0/$NAME  auto  ro,nofail,auto,loop$4  0  10' >> /etc/fstab";
+            if [ "$3" == "bindfs" ]; then
+                sudo sh -c "echo '$DST_ISO/$FILE_ISO  $DST_ORIGINAL  auto  ro,nofail,auto,loop  0  10' >> /etc/fstab";
+                sudo sh -c "echo '$DST_ORIGINAL  $DST_NFS_ETH0/$NAME  fuse.bindfs  ro,auto,force-user=root,force-group=root,perms=a+rX  0  11' >> /etc/fstab";
             else
-                sudo sh -c "echo '$DST_ISO/$FILE_ISO  $DST_NFS_ETH0/$NAME  auto  ro,nofail,auto,loop$3  0  10' >> /etc/fstab";
+                if [ "$3" == "timestamping" ]; then
+                    sudo sh -c "echo '$DST_ISO/$FILE_ISO  $DST_NFS_ETH0/$NAME  auto  ro,nofail,auto,loop$4  0  10' >> /etc/fstab";
+                else
+                    sudo sh -c "echo '$DST_ISO/$FILE_ISO  $DST_NFS_ETH0/$NAME  auto  ro,nofail,auto,loop$3  0  10' >> /etc/fstab";
+                fi
             fi
         fi
 
@@ -1293,15 +1680,23 @@ handle_iso() {
             sudo sh -c "echo '$DST_NFS_ETH0/$NAME  *(ro,async,no_subtree_check,root_squash,mp,fsid=$(uuid))' >> /etc/exports";
         fi
 
+        if [ "$3" == "bindfs" ]; then sudo mount $DST_ORIGINAL; fi
         sudo mount $DST_NFS_ETH0/$NAME;
         sudo exportfs *:$DST_NFS_ETH0/$NAME;
+
+        #if [ -d "/var/www/html" ]; then
+        #    if ! [ -h "/var/www/html/$FILE_ISO" ]; then
+        #        sudo ln -s $DST_ISO/$FILE_ISO /var/www/html/$FILE_ISO
+        #    fi
+        #    if ! [ -h "/var/www/html/$NAME" ]; then
+        #        sudo ln -s $DST_NFS_ETH0/$NAME/ /var/www/html/$NAME
+        #    fi
+        #fi
     else
         sudo sed /etc/fstab   -i -e "/$NAME/d"
         sudo sed /etc/exports -i -e "/$NAME/d"
     fi
 }
-
-
 
 
 ##########################################################################
@@ -1458,61 +1853,25 @@ handle_zip_img() {
     fi
 }
 
-
-######################################################################
-handle_network_booting() {
-    # $1 : short name
-    # $2 : flags (redo,bootcode,cmdline,config,ssh,root,fstab,wpa,history)
-    ##############################################################
-    local NAME=$1
-    local FLAGS=$2
-    local NAME_BOOT=$NAME-boot
-    local NAME_ROOT=$NAME-root
-    local SRC_BOOT=$DST_NFS_ETH0/$NAME_BOOT
-    local SRC_ROOT=$DST_NFS_ETH0/$NAME_ROOT
-    local DST_BOOT=$DST_NFS_ETH0/$RPI_SN0_BOOT
-    local DST_ROOT=$DST_NFS_ETH0/$RPI_SN0_ROOT
-    local FILE_URL=$NAME.url
-    ##############################################################
-    echo -e "\e[32mhandle_network_booting(\e[0m$NAME\e[32m)\e[0m";
-    if [ "$RPI_SN0" == "--------" ]; then
-        echo -e "\e[36m    skipped: no serial number setted at RPI_SN0.\e[0m";
-        return 1;
-    fi
-    sudo exportfs -u *:$DST_BOOT 2> /dev/null;
-    sudo exportfs -u *:$DST_ROOT 2> /dev/null;
-
+##########################################################################
+handle_rpi_pxe_customization() {
+    echo -e "\e[36m    handle_rpi_pxe_customization()\e[0m";
     ######################################################################
-    if ! [ -d "$DST_BOOT" ]; then sudo mkdir -p $DST_BOOT; fi
-    if ! [ -d "$DST_ROOT" ]; then sudo mkdir -p $DST_ROOT; fi
-
+    local DST_CUSTOM_BOOT=$1
+    local DST_CUSTOM_ROOT=$2
+    local FLAGS=$3
     ######################################################################
-    if ! [ -h "$DST_TFTP_ETH0/$RPI_SN0" ]; then sudo ln -s $DST_BOOT/  $DST_TFTP_ETH0/$RPI_SN0; fi
-
-    ######################################################################
-    if (echo $FLAGS | grep -q redo) \
-    || ! grep -q $(cat $DST_IMG/$FILE_URL)  $DST_BOOT/$FILE_URL 2> /dev/null; then
-        echo -e "\e[36m    delete old boot files\e[0m";
-        sudo rm -rf $DST_BOOT/*;
-        echo -e "\e[36m    delete old root files\e[0m";
-        sudo rm -rf $DST_ROOT/*;
-
-        ##################################################################
-        if ! [ -f "$DST_BOOT/bootcode.bin" ]; then
-            echo -e "\e[36m    copy boot files\e[0m";
-            sudo rsync -xa --info=progress2 $SRC_BOOT/*  $DST_BOOT/
-        fi
-
+    if (echo $FLAGS | grep -q redo); then
         ##################################################################
         if (echo $FLAGS | grep -q cmdline); then
             echo -e "\e[36m    add cmdline file\e[0m";
-            sudo sh -c "echo 'dwc_otg.lpm_enable=0 console=serial0,115200 console=tty1 plymouth.ignore-serial-consoles root=/dev/nfs nfsroot=$IP_ETH0:$DST_NFS_ETH0/$RPI_SN0_ROOT,vers=3 rw ip=dhcp rootwait net.ifnames=0 elevator=deadline' > $DST_BOOT/cmdline.txt";
+            sudo sh -c "echo 'dwc_otg.lpm_enable=0 console=serial0,115200 console=tty1 plymouth.ignore-serial-consoles root=/dev/nfs nfsroot=$IP_ETH0:$DST_NFS_ROOT,vers=3 rootwait rw ip=dhcp elevator=deadline net.ifnames=0 consoleblank=0' > $DST_CUSTOM_BOOT/cmdline.txt";
         fi
 
         ##################################################################
         if (echo $FLAGS | grep -q config); then
             echo -e "\e[36m    add config file\e[0m";
-            sudo sh -c "cat << EOF  > $DST_BOOT/config.txt
+            sudo sh -c "cat << EOF  > $DST_CUSTOM_BOOT/config.txt
 ########################################
 dtparam=audio=on
 
@@ -1556,33 +1915,29 @@ EOF";
         ##################################################################
         if (echo $FLAGS | grep -q ssh); then
             echo -e "\e[36m    add ssh file\e[0m";
-            sudo touch $DST_BOOT/ssh;
+            sudo touch $DST_CUSTOM_BOOT/ssh;
         fi
 
         ##################################################################
         if (echo $FLAGS | grep -q root); then
-            if ! [ -d "$DST_ROOT/etc" ]; then
-                echo -e "\e[36m    copy root files\e[0m";
-                sudo rsync -xa --info=progress2 $SRC_ROOT/*  $DST_ROOT/
-            fi
-
             ##############################################################
             if (echo $FLAGS | grep -q fstab); then
                 echo -e "\e[36m    add fstab file\e[0m";
-                sudo sh -c "cat << EOF  > $DST_ROOT/etc/fstab
+                sudo sh -c "cat << EOF  > $DST_CUSTOM_ROOT/etc/fstab
 ########################################
 proc  /proc  proc  defaults  0  0
-$IP_ETH0:$DST_NFS_ETH0/$RPI_SN0_BOOT  /boot  nfs   defaults,nofail,noatime  0  2
-$IP_ETH0:$DST_NFS_ETH0/$RPI_SN0_ROOT  /      nfs   defaults,nofail,noatime  0  1
+$IP_ETH0:$DST_NFS_ROOT  /      nfs   defaults,noatime  0  1
+$IP_ETH0:$DST_NFS_BOOT  /boot  nfs   defaults,noatime  0  2
 EOF";
+                sudo rm $DST_CUSTOM_ROOT/etc/init.d/resize2fs_once;
             fi
 
             ##############################################################
             if (echo $FLAGS | grep -q wpa); then
                 echo -e "\e[36m    add wpa_supplicant template file\e[0m";
-                sudo sh -c "cat << EOF  > $DST_ROOT/etc/wpa_supplicant/wpa_supplicant.conf
+                sudo sh -c "cat << EOF  > $DST_CUSTOM_ROOT/etc/wpa_supplicant/wpa_supplicant.conf
 ########################################
-country=DE
+country=$COUNTRY_WLAN0
 ctrl_interface=DIR=/var/run/wpa_supplicant GROUP=netdev
 update_config=1
 
@@ -1600,16 +1955,17 @@ network={
 EOF";
                 if [ -f "$SRC_BACKUP/wpa_supplicant.conf" ]; then
                     echo -e "\e[36m    add wpa_supplicant file from backup\e[0m";
-                    sudo rsync -xa --info=progress2 $SRC_BACKUP/wpa_supplicant.conf  $DST_ROOT/etc/wpa_supplicant/
+                    sudo rsync -xa --info=progress2 $SRC_BACKUP/wpa_supplicant.conf  $DST_CUSTOM_ROOT/etc/wpa_supplicant/
                 fi
             fi
 
             ##############################################################
             if (echo $FLAGS | grep -q history); then
                 echo -e "\e[36m    add .bash_history file\e[0m";
-                sudo sh -c "cat << EOF  > $DST_ROOT/home/pi/.bash_history
+                sudo sh -c "cat << EOF  > $DST_CUSTOM_ROOT/home/pi/.bash_history
 sudo poweroff
-sudo apt-get update && sudo apt-get -y upgrade && sudo apt-get -y dist-upgrade && sudo apt-get -y --purge autoremove && sudo apt-get -y autoclean && sync && echo Done.
+sudo apt update && sudo apt upgrade -y && sudo apt dist-upgrade -y && sudo apt autoremove -y --purge && sudo apt autoclean -y && sync && echo Done.
+sudo nano /etc/resolv.conf
 ip route
 sudo ip route del default dev eth0
 sudo reboot
@@ -1618,117 +1974,293 @@ wpa_passphrase <SSID> <PASSWORD>
 sudo iwlist wlan0 scan  [essid <SSID>]
 sudo raspi-config
 EOF";
-                sudo chown 1000:1000 $DST_ROOT/home/pi/.bash_history;
+                sudo chown 1000:1000 $DST_CUSTOM_ROOT/home/pi/.bash_history;
+            fi
+
+            ##################################################################
+            if (echo $FLAGS | grep -q apt); then
+                ##############################################################
+                if ! [ -f "$DST_CUSTOM_ROOT/etc/apt/apt.conf.d/01proxy" ]; then
+                    echo -e "\e[36m    add apt proxy file\e[0m";
+                    sudo sh -c "cat << EOF  > $DST_CUSTOM_ROOT/etc/apt/apt.conf.d/01proxy
+Acquire::http::Proxy \"http://$IP_ETH0:3142\";
+EOF";
+                fi
             fi
         fi
+    fi
+}
 
-        ##################################################################
-        sudo cp $DST_IMG/$FILE_URL $DST_BOOT/$FILE_URL;
+##########################################################################
+handle_rpi_pxe_classic() {
+    echo -e "\e[32mhandle_rpi_pxe_classic(\e[0m$1\e[32m)\e[0m";
+    ######################################################################
+    # $1 : short name
+    # $2 : serial number
+    # $3 : flags (redo,bootcode,cmdline,config,ssh,root,fstab,wpa,history)
+    ######################################################################
+    local NAME=$1
+    local SN=$2
+    local FLAGS=$3
+    local NAME_BOOT=$NAME-boot
+    local NAME_ROOT=$NAME-root
+    local DST_SN_BOOT=$SN-boot
+    local DST_SN_ROOT=$SN-root
+    local SRC_BOOT=$DST_NFS_ETH0/$NAME_BOOT
+    local SRC_ROOT=$DST_NFS_ETH0/$NAME_ROOT
+    local DST_NFS_BOOT=$DST_NFS_ETH0/$DST_SN_BOOT
+    local DST_NFS_ROOT=$DST_NFS_ETH0/$DST_SN_ROOT
+    local FILE_URL=$NAME.url
+    ######################################################################
+    local DST_CUSTOM_BOOT=$DST_NFS_BOOT
+    local DST_CUSTOM_ROOT=$DST_NFS_ROOT
+    ######################################################################
+
+    sudo exportfs -u *:$DST_NFS_BOOT 2> /dev/null;
+    sudo umount -f $DST_NFS_BOOT 2> /dev/null;
+
+    sudo exportfs -u *:$DST_NFS_ROOT 2> /dev/null;
+    sudo umount -f $DST_NFS_BOOT 2> /dev/null;
+
+
+    ######################################################################
+    if (echo $FLAGS | grep -q redo) \
+    || ! grep -q $(cat $DST_IMG/$FILE_URL)  $DST_NFS_BOOT/$FILE_URL 2> /dev/null; then
+        echo -e "\e[36m    delete old boot files\e[0m";
+        sudo rm -rf $DST_NFS_BOOT;
+        echo -e "\e[36m    delete old root files\e[0m";
+        sudo rm -rf $DST_NFS_ROOT;
+        sudo sed /etc/fstab -i -e "/$DST_SN_BOOT/d"
+        sudo sed /etc/fstab -i -e "/$DST_SN_ROOT/d"
+        sudo sed /etc/exports -i -e "/$DST_SN_BOOT/d"
+        sudo sed /etc/exports -i -e "/$DST_SN_ROOT/d"
+        local FLAGS=$FLAGS,redo
     fi
 
     ######################################################################
-    if ! grep -q "$DST_BOOT" /etc/exports; then
-        echo -e "\e[36m    add $DST_BOOT to exports\e[0m";
-        sudo sh -c "echo '$DST_BOOT  *(rw,sync,no_subtree_check,no_root_squash)' >> /etc/exports";
+    if ! [ -d "$DST_NFS_BOOT" ]; then
+        echo -e "\e[36m    copy boot files\e[0m";
+        sudo mkdir -p $DST_NFS_BOOT;
+        sudo rsync -xa --info=progress2 $SRC_BOOT/*  $DST_NFS_BOOT/
     fi
-    sudo exportfs *:$DST_BOOT;
+
+    if ! [ -d "$DST_NFS_ROOT" ] \
+    && (echo $FLAGS | grep -q root); then
+        echo -e "\e[36m    copy root files\e[0m";
+        sudo mkdir -p $DST_NFS_ROOT;
+        sudo rsync -xa --info=progress2 $SRC_ROOT/*  $DST_NFS_ROOT/
+    fi
+
+    ######################################################################
+    if ! [ -h "$DST_TFTP_ETH0/$SN" ]; then sudo ln -s $DST_NFS_BOOT/  $DST_TFTP_ETH0/$SN; fi
+
+    ######################################################################
+    sudo cp $DST_IMG/$FILE_URL $DST_CUSTOM_BOOT/$FILE_URL;
+    handle_rpi_pxe_customization $DST_CUSTOM_BOOT $DST_CUSTOM_ROOT $FLAGS;
+
+    ######################################################################
+    if ! grep -q "$DST_NFS_BOOT" /etc/exports; then
+        echo -e "\e[36m    add $DST_NFS_BOOT to exports\e[0m";
+        sudo sh -c "echo '$DST_NFS_BOOT  *(rw,sync,no_subtree_check,no_root_squash)' >> /etc/exports";
+    fi
+    sudo exportfs *:$DST_NFS_BOOT;
 
     ######################################################################
     if (echo $FLAGS | grep -q root); then
-        if ! grep -q "$DST_ROOT" /etc/exports; then
-            echo -e "\e[36m    add $DST_ROOT to exports\e[0m";
-            sudo sh -c "echo '$DST_ROOT  *(rw,sync,no_subtree_check,no_root_squash)' >> /etc/exports";
+        if ! grep -q "$DST_NFS_ROOT" /etc/exports; then
+            echo -e "\e[36m    add $DST_NFS_ROOT to exports\e[0m";
+            sudo sh -c "echo '$DST_NFS_ROOT  *(rw,sync,no_subtree_check,no_root_squash)' >> /etc/exports";
         fi
-        sudo exportfs *:$DST_ROOT;
+        sudo exportfs *:$DST_NFS_ROOT;
     else
         sudo sed /etc/exports -i -e "/$NAME_ROOT/d"
     fi
 
     ######################################################################
-    if (echo $FLAGS | grep -q bootcode); then
-        if [ -f "$DST_BOOT/bootcode.bin" ]; then
-            echo -e "\e[36m    copy bootcode.bin for RPi3 NETWORK BOOTING\e[0m";
-            sudo cp $DST_BOOT/bootcode.bin $DST_TFTP_ETH0/bootcode.bin;
+    if ! [ -f "$DST_TFTP_ETH0/bootcode.bin" ]; then
+        echo -e "\e[36m    download bootcode.bin for RPi3 network booting\e[0m";
+        sudo wget -O $DST_TFTP_ETH0/bootcode.bin  https://github.com/raspberrypi/firmware/raw/stable/boot/bootcode.bin;
+    fi
+}
+
+##########################################################################
+handle_rpi_pxe_overlay() {
+    echo -e "\e[32mhandle_rpi_pxe_overlay(\e[0m$1\e[32m)\e[0m";
+    ######################################################################
+    # $1 : short name
+    # $2 : serial number
+    # $3 : flags (redo,bootcode,cmdline,config,ssh,root,fstab,wpa,history)
+    ######################################################################
+    local NAME=$1
+    local SN=$2
+    local FLAGS=$3
+    local NAME_BOOT=$NAME-boot
+    local NAME_ROOT=$NAME-root
+    local DST_SN_BOOT=$SN-boot
+    local DST_SN_ROOT=$SN-root
+    local SRC_BOOT=$DST_NFS_ETH0/$NAME_BOOT
+    local SRC_ROOT=$DST_NFS_ETH0/$NAME_ROOT
+    local DST_NFS_BOOT=$DST_NFS_ETH0/$DST_SN_BOOT
+    local DST_NFS_ROOT=$DST_NFS_ETH0/$DST_SN_ROOT
+    local FILE_URL=$NAME.url
+    ######################################################################
+    local DST_LOWER_BOOT=/srv/tmp/lower/$NAME_BOOT
+    local DST_LOWER_ROOT=$SRC_ROOT
+    local DST_UPPER_BOOT=/srv/tmp/upper/$DST_SN_BOOT
+    local DST_UPPER_ROOT=/srv/tmp/upper/$DST_SN_ROOT
+    local DST_WORK_BOOT=/srv/tmp/work/$DST_SN_BOOT
+    local DST_WORK_ROOT=/srv/tmp/work/$DST_SN_ROOT
+    local DST_MERGED_BOOT=/srv/tmp/merged/$DST_SN_BOOT
+    local DST_MERGED_ROOT=/srv/tmp/merged/$DST_SN_ROOT
+    ######################################################################
+    local DST_CUSTOM_BOOT=$DST_NFS_BOOT
+    local DST_CUSTOM_ROOT=$DST_NFS_ROOT
+    ######################################################################
+
+    sudo exportfs -u *:$DST_NFS_BOOT 2> /dev/null;
+    sudo umount -f $DST_NFS_BOOT 2> /dev/null;
+    sudo umount -f $DST_MERGED_BOOT 2> /dev/null;
+    sudo umount -f $DST_LOWER_BOOT 2> /dev/null;
+
+    sudo exportfs -u *:$DST_NFS_ROOT 2> /dev/null;
+    sudo umount -f $DST_NFS_ROOT 2> /dev/null;
+    sudo umount -f $DST_MERGED_ROOT 2> /dev/null;
+
+
+    ######################################################################
+    if (echo $FLAGS | grep -q redo) \
+    || ! grep -q $(cat $DST_IMG/$FILE_URL)  $DST_UPPER_BOOT/$FILE_URL 2> /dev/null; then
+        echo -e "\e[36m    delete old boot files\e[0m";
+        sudo rm -rf $DST_NFS_BOOT;
+        sudo rm -rf $DST_UPPER_BOOT;
+        sudo rm -rf $DST_WORK_BOOT;
+        sudo rm -rf $DST_MERGED_BOOT;
+        sudo rm -rf $DST_LOWER_BOOT;
+        echo -e "\e[36m    delete old root files\e[0m";
+        sudo rm -rf $DST_NFS_ROOT;
+        sudo rm -rf $DST_UPPER_ROOT;
+        sudo rm -rf $DST_WORK_ROOT;
+        sudo rm -rf $DST_MERGED_BOOT;
+        sudo sed /etc/fstab -i -e "/$DST_SN_BOOT/d"
+        sudo sed /etc/fstab -i -e "/$DST_SN_ROOT/d"
+        sudo sed /etc/exports -i -e "/$DST_SN_BOOT/d"
+        sudo sed /etc/exports -i -e "/$DST_SN_ROOT/d"
+        local FLAGS=$FLAGS,redo
+    fi
+
+    ######################################################################
+    if ! [ -d "$DST_NFS_BOOT" ]; then sudo mkdir -p $DST_NFS_BOOT; fi
+    if ! [ -d "$DST_UPPER_BOOT" ]; then sudo mkdir -p $DST_UPPER_BOOT; fi
+    if ! [ -d "$DST_WORK_BOOT" ]; then sudo mkdir -p $DST_WORK_BOOT; fi
+    if ! [ -d "$DST_MERGED_BOOT" ]; then sudo mkdir -p $DST_MERGED_BOOT; fi
+    if ! [ -d "$DST_LOWER_BOOT" ]; then sudo mkdir -p $DST_LOWER_BOOT; fi
+    ######################################################################
+    if (echo $FLAGS | grep -q root); then
+        if ! [ -d "$DST_NFS_ROOT" ]; then sudo mkdir -p $DST_NFS_ROOT; fi
+        if ! [ -d "$DST_UPPER_ROOT" ]; then sudo mkdir -p $DST_UPPER_ROOT; fi
+        if ! [ -d "$DST_WORK_ROOT" ]; then sudo mkdir -p $DST_WORK_ROOT; fi
+        if ! [ -d "$DST_MERGED_ROOT" ]; then sudo mkdir -p $DST_MERGED_ROOT; fi
+    fi
+
+    ######################################################################
+    if ! [ -f "/etc/mount-delayed.sh" ]; then sudo touch /etc/mount-delayed.sh; sudo chmod 0755 /etc/mount-delayed.sh; fi
+    if ! grep -q "mount-delayed.sh" /etc/rc.local; then
+        sudo sed /etc/rc.local -i -e "s/^exit 0$/\########################################\n## workaround\n\/etc\/mount-delayed.sh;\n\nexit 0/"
+    fi
+    sudo sed /etc/mount-delayed.sh -i -e "/$DST_SN_BOOT/d"
+    sudo sh -c "echo 'mount $DST_LOWER_BOOT' >> /etc/mount-delayed.sh";
+    sudo sh -c "echo 'mount $DST_MERGED_BOOT' >> /etc/mount-delayed.sh";
+    sudo sh -c "echo 'mount $DST_NFS_BOOT' >> /etc/mount-delayed.sh";
+    sudo sed /etc/mount-delayed.sh -i -e "/$DST_SN_ROOT/d"
+    if (echo $FLAGS | grep -q root); then
+        sudo sh -c "echo 'mount $DST_MERGED_ROOT' >> /etc/mount-delayed.sh";
+        sudo sh -c "echo 'mount $DST_NFS_ROOT' >> /etc/mount-delayed.sh";
+    fi
+
+    ######################################################################
+    if ! grep -q "$DST_NFS_BOOT" /etc/fstab; then
+        echo -e "\e[36m    add image-boot to fstab\e[0m";
+        sudo sh -c "echo '$SRC_BOOT  $DST_LOWER_BOOT  fuse.bindfs  ro,noauto  0  12' >> /etc/fstab";
+        sudo sh -c "echo 'overlay  $DST_MERGED_BOOT  overlay  rw,noauto,lowerdir=$DST_LOWER_BOOT,upperdir=$DST_UPPER_BOOT,workdir=$DST_WORK_BOOT  0  13' >> /etc/fstab";
+        sudo sh -c "echo '$DST_MERGED_BOOT  $DST_NFS_BOOT  fuse.bindfs  rw,noauto  0  14' >> /etc/fstab";
+    fi
+
+    ######################################################################
+    if (echo $FLAGS | grep -q root); then
+        if ! grep -q "$DST_NFS_ROOT" /etc/fstab; then
+            echo -e "\e[36m    add image-root to fstab\e[0m";
+            sudo sh -c "echo 'overlay  $DST_MERGED_ROOT  overlay  rw,lowerdir=$DST_LOWER_ROOT,upperdir=$DST_UPPER_ROOT,workdir=$DST_WORK_ROOT  0  13' >> /etc/fstab";
+            sudo sh -c "echo '$DST_MERGED_ROOT  $DST_NFS_ROOT  fuse.bindfs  rw,noauto  0  14' >> /etc/fstab";
         fi
+    fi
+
+
+    ######################################################################
+    sudo mount $DST_LOWER_BOOT;
+    sudo mount $DST_MERGED_BOOT;
+    sudo mount $DST_NFS_BOOT;
+    if (echo $FLAGS | grep -q root); then
+        sudo mount $DST_MERGED_ROOT;
+        sudo mount $DST_NFS_ROOT;
+    fi
+
+    ######################################################################
+    if ! [ -h "$DST_TFTP_ETH0/$SN" ]; then sudo ln -s $DST_NFS_BOOT/  $DST_TFTP_ETH0/$SN; fi
+
+    ######################################################################
+    sudo cp $DST_IMG/$FILE_URL $DST_CUSTOM_BOOT/$FILE_URL;
+    handle_rpi_pxe_customization $DST_CUSTOM_BOOT $DST_CUSTOM_ROOT $FLAGS;
+
+    ######################################################################
+    if ! grep -q "$DST_NFS_BOOT" /etc/exports; then
+        echo -e "\e[36m    add $DST_NFS_BOOT to exports\e[0m";
+        sudo sh -c "echo '$DST_NFS_BOOT  *(rw,sync,no_subtree_check,no_root_squash,mp,fsid=$(uuid))' >> /etc/exports";
+    fi
+    sudo exportfs *:$DST_NFS_BOOT;
+
+    ######################################################################
+    if (echo $FLAGS | grep -q root); then
+        if ! grep -q "$DST_NFS_ROOT" /etc/exports; then
+            echo -e "\e[36m    add $DST_NFS_ROOT to exports\e[0m";
+            sudo sh -c "echo '$DST_NFS_ROOT  *(rw,sync,no_subtree_check,no_root_squash,mp,fsid=$(uuid))' >> /etc/exports";
+        fi
+        sudo exportfs *:$DST_NFS_ROOT;
+    else
+        sudo sed /etc/fstab   -i -e "/$DST_SN_ROOT/d"
+        sudo sed /etc/exports -i -e "/$DST_SN_ROOT/d"
     fi
 
     ######################################################################
     if ! [ -f "$DST_TFTP_ETH0/bootcode.bin" ]; then
-        echo -e "\e[36m    download bootcode.bin for RPi3 NETWORK BOOTING\e[0m";
+        echo -e "\e[36m    download bootcode.bin for RPi3 network booting\e[0m";
         sudo wget -O $DST_TFTP_ETH0/bootcode.bin  https://github.com/raspberrypi/firmware/raw/stable/boot/bootcode.bin;
     fi
 }
 
 
-######################################################################
-handle_pxe() {
-    echo -e "\e[32mhandle_pxe()\e[0m";
-
-    ######################################################################
-    [ -d "$DST_TFTP_ETH0/$DST_PXE_BIOS" ]            || sudo mkdir -p $DST_TFTP_ETH0/$DST_PXE_BIOS;
-    if [ -d "$SRC_TFTP_ETH0" ]; then
-        echo -e "\e[36m    copy win-pe stuff\e[0m";
-        if ! [ -f "$DST_TFTP_ETH0/$DST_PXE_BIOS/pxeboot.n12" ] && [ -f "$SRC_TFTP_ETH0/pxeboot.n12" ]; then sudo rsync -xa --info=progress2 $SRC_TFTP_ETH0/pxeboot.n12  $DST_TFTP_ETH0/$DST_PXE_BIOS/; fi
-        if ! [ -f "$DST_TFTP_ETH0/bootmgr.exe" ] && [ -f "$SRC_TFTP_ETH0/bootmgr.exe" ]; then sudo rsync -xa --info=progress2 $SRC_TFTP_ETH0/bootmgr.exe  $DST_TFTP_ETH0/; fi
-        if ! [ -d "$DST_TFTP_ETH0/boot" ] && [ -d "$SRC_TFTP_ETH0/boot" ]; then sudo rsync -xa --info=progress2 $SRC_TFTP_ETH0/boot  $DST_TFTP_ETH0/; fi
+##########################################################################
+handle_rpi_pxe() {
+   if [ "$2" == "--------" ]; then
+        echo -e "\e[36m    skipped: no proper serial number given.\e[0m";
+        return 1;
     fi
-    [ -h "$DST_TFTP_ETH0/sources" ]                  || sudo ln -s $DST_NFS_ETH0/$WIN_PE_X86/sources/  $DST_TFTP_ETH0/sources;
-    #for SRC in `find /srv/tftp/Boot -depth`
-    #do
-    #    DST=`dirname "${SRC}"`/`basename "${SRC}" | tr '[A-Z]' '[a-z]'`
-    #    if [ "${SRC}" != "${DST}" ]
-    #    then
-    #        [ ! -e "${DST}" ] && sudo mv -T "${SRC}" "${DST}" || echo "${SRC} was not renamed"
-    #    fi
-    #done
 
+    if [ $(($KERNEL_VER < 413)) != 0 ]; then
+        handle_rpi_pxe_classic  $1 $2 $3;
+        # overlayfs is working, when you put a bindfs on top of overlayfs, to make exportfs happy
+        # note: this construction does NOT work reliably - data loss!
+        #handle_rpi_pxe_overlay  $1 $2 $3;
+    else
+        # overlayFS is still not able to export via nfs
+        handle_rpi_pxe_classic  $1 $2 $3;
 
-    ######################################################################
-    echo -e "\e[36m    setup sys menu files for pxe bios\e[0m";
-    [ -d "$DST_TFTP_ETH0/$DST_PXE_BIOS" ]              || sudo mkdir -p $DST_TFTP_ETH0/$DST_PXE_BIOS;
-    [ -h "$DST_TFTP_ETH0/$DST_PXE_BIOS/lpxelinux.0" ]  || sudo ln -s /usr/lib/PXELINUX/lpxelinux.0                $DST_TFTP_ETH0/$DST_PXE_BIOS/;
-    [ -h "$DST_TFTP_ETH0/$DST_PXE_BIOS/ldlinux.c32" ]  || sudo ln -s /usr/lib/syslinux/modules/bios/ldlinux.c32   $DST_TFTP_ETH0/$DST_PXE_BIOS/;
-    [ -h "$DST_TFTP_ETH0/$DST_PXE_BIOS/vesamenu.c32" ] || sudo ln -s /usr/lib/syslinux/modules/bios/vesamenu.c32  $DST_TFTP_ETH0/$DST_PXE_BIOS/;
-    [ -h "$DST_TFTP_ETH0/$DST_PXE_BIOS/libcom32.c32" ] || sudo ln -s /usr/lib/syslinux/modules/bios/libcom32.c32  $DST_TFTP_ETH0/$DST_PXE_BIOS/;
-    [ -h "$DST_TFTP_ETH0/$DST_PXE_BIOS/libutil.c32" ]  || sudo ln -s /usr/lib/syslinux/modules/bios/libutil.c32   $DST_TFTP_ETH0/$DST_PXE_BIOS/;
-    [ -h "$DST_TFTP_ETH0/$DST_PXE_BIOS/reboot.c32" ]   || sudo ln -s /usr/lib/syslinux/modules/bios/reboot.c32    $DST_TFTP_ETH0/$DST_PXE_BIOS/;
-    [ -h "$DST_TFTP_ETH0/$DST_PXE_BIOS/poweroff.c32" ] || sudo ln -s /usr/lib/syslinux/modules/bios/poweroff.c32  $DST_TFTP_ETH0/$DST_PXE_BIOS/;
-    [ -h "$DST_TFTP_ETH0/$DST_PXE_BIOS/memdisk" ]      || sudo ln -s /usr/lib/syslinux/memdisk                    $DST_TFTP_ETH0/$DST_PXE_BIOS/;
-    [ -h "$DST_TFTP_ETH0/$DST_PXE_BIOS/nfs" ]          || sudo ln -s $DST_NFS_ETH0/                               $DST_TFTP_ETH0/$DST_PXE_BIOS/nfs;
-    [ -h "$DST_TFTP_ETH0/$DST_PXE_BIOS/iso" ]          || sudo ln -s $DST_ISO/                                    $DST_TFTP_ETH0/$DST_PXE_BIOS/iso;
-    handle_pxe_menu  $DST_PXE_BIOS  default;
-
-    ######################################################################
-    echo -e "\e[36m    setup sys menu files for pxe efi32\e[0m";
-    [ -d "$DST_TFTP_ETH0/$DST_PXE_EFI32" ]              || sudo mkdir -p $DST_TFTP_ETH0/$DST_PXE_EFI32;
-    [ -h "$DST_TFTP_ETH0/$DST_PXE_EFI32/syslinux.efi" ] || sudo ln -s /usr/lib/SYSLINUX.EFI/efi32/syslinux.efi      $DST_TFTP_ETH0/$DST_PXE_EFI32/;
-    [ -h "$DST_TFTP_ETH0/$DST_PXE_EFI32/ldlinux.e32" ]  || sudo ln -s /usr/lib/syslinux/modules/efi32/ldlinux.e32   $DST_TFTP_ETH0/$DST_PXE_EFI32/;
-    [ -h "$DST_TFTP_ETH0/$DST_PXE_EFI32/vesamenu.c32" ] || sudo ln -s /usr/lib/syslinux/modules/efi32/vesamenu.c32  $DST_TFTP_ETH0/$DST_PXE_EFI32/;
-    [ -h "$DST_TFTP_ETH0/$DST_PXE_EFI32/libcom32.c32" ] || sudo ln -s /usr/lib/syslinux/modules/efi32/libcom32.c32  $DST_TFTP_ETH0/$DST_PXE_EFI32/;
-    [ -h "$DST_TFTP_ETH0/$DST_PXE_EFI32/libutil.c32" ]  || sudo ln -s /usr/lib/syslinux/modules/efi32/libutil.c32   $DST_TFTP_ETH0/$DST_PXE_EFI32/;
-    [ -h "$DST_TFTP_ETH0/$DST_PXE_EFI32/reboot.c32" ]   || sudo ln -s /usr/lib/syslinux/modules/efi32/reboot.c32    $DST_TFTP_ETH0/$DST_PXE_EFI32/;
-    [ -h "$DST_TFTP_ETH0/$DST_PXE_EFI32/poweroff.c32" ] || sudo ln -s /usr/lib/syslinux/modules/efi32/poweroff.c32  $DST_TFTP_ETH0/$DST_PXE_EFI32/;
-    [ -h "$DST_TFTP_ETH0/$DST_PXE_EFI32/nfs" ]          || sudo ln -s $DST_NFS_ETH0/                                $DST_TFTP_ETH0/$DST_PXE_EFI32/nfs;
-    [ -h "$DST_TFTP_ETH0/$DST_PXE_EFI32/iso" ]          || sudo ln -s $DST_ISO/                                     $DST_TFTP_ETH0/$DST_PXE_EFI32/iso;
-    handle_pxe_menu  $DST_PXE_EFI32  default;
-
-    ######################################################################
-    echo -e "\e[36m    setup sys menu files for pxe efi64\e[0m";
-    [ -d "$DST_TFTP_ETH0/$DST_PXE_EFI64" ]              || sudo mkdir -p $DST_TFTP_ETH0/$DST_PXE_EFI64;
-    [ -h "$DST_TFTP_ETH0/$DST_PXE_EFI64/syslinux.efi" ] || sudo ln -s /usr/lib/SYSLINUX.EFI/efi64/syslinux.efi      $DST_TFTP_ETH0/$DST_PXE_EFI64/;
-    [ -h "$DST_TFTP_ETH0/$DST_PXE_EFI64/ldlinux.e64" ]  || sudo ln -s /usr/lib/syslinux/modules/efi64/ldlinux.e64   $DST_TFTP_ETH0/$DST_PXE_EFI64/;
-    [ -h "$DST_TFTP_ETH0/$DST_PXE_EFI64/vesamenu.c32" ] || sudo ln -s /usr/lib/syslinux/modules/efi64/vesamenu.c32  $DST_TFTP_ETH0/$DST_PXE_EFI64/;
-    [ -h "$DST_TFTP_ETH0/$DST_PXE_EFI64/libcom32.c32" ] || sudo ln -s /usr/lib/syslinux/modules/efi64/libcom32.c32  $DST_TFTP_ETH0/$DST_PXE_EFI64/;
-    [ -h "$DST_TFTP_ETH0/$DST_PXE_EFI64/libutil.c32" ]  || sudo ln -s /usr/lib/syslinux/modules/efi64/libutil.c32   $DST_TFTP_ETH0/$DST_PXE_EFI64/;
-    [ -h "$DST_TFTP_ETH0/$DST_PXE_EFI64/reboot.c32" ]   || sudo ln -s /usr/lib/syslinux/modules/efi64/reboot.c32    $DST_TFTP_ETH0/$DST_PXE_EFI64/;
-    [ -h "$DST_TFTP_ETH0/$DST_PXE_EFI64/poweroff.c32" ] || sudo ln -s /usr/lib/syslinux/modules/efi64/poweroff.c32  $DST_TFTP_ETH0/$DST_PXE_EFI64/;
-    [ -h "$DST_TFTP_ETH0/$DST_PXE_EFI64/nfs" ]          || sudo ln -s $DST_NFS_ETH0/                                $DST_TFTP_ETH0/$DST_PXE_EFI64/nfs;
-    [ -h "$DST_TFTP_ETH0/$DST_PXE_EFI64/iso" ]          || sudo ln -s $DST_ISO/                                     $DST_TFTP_ETH0/$DST_PXE_EFI64/iso;
-    handle_pxe_menu  $DST_PXE_EFI64  default;
+        # overlayfs is working, when you put a bindfs on top of overlayfs, to make exportfs happy
+        # note: this construction does NOT work reliably - data loss!
+        #handle_rpi_pxe_overlay  $1 $2 $3;
+    fi
 }
 
-
-######################################################################
+##########################################################################
 handle_optional() {
     echo -e "\e[32mhandle_optional()\e[0m";
 
@@ -1742,36 +2274,65 @@ handle_optional() {
 
 
     ######################################################################
-    ## network bridge
-    #bridge#grep -q mod_install_server /etc/sysctrl.conf 2> /dev/null || {
-    #bridge#echo -e "\e[36m    setup sysctrl for bridging\e[0m";
-    #bridge#sudo sh -c "cat << EOF  >> /etc/sysctl.conf
-#bridge#########################################
-#bridge### mod_install_server
-#bridge#net.ipv4.ip_forward=1
-#bridge#net.ipv6.conf.all.forwarding=1
-#bridge##net.ipv6.conf.all.disable_ipv6 = 1
-#bridge#EOF";
-    #bridge#}
+    ## network nat
+    grep -q mod_install_server /etc/sysctl.conf 2> /dev/null || {
+    echo -e "\e[36m    setup sysctrl for nat\e[0m";
+    sudo sh -c "cat << EOF  >> /etc/sysctl.conf
+########################################
+## mod_install_server
+net.ipv4.ip_forward=1
+#net.ipv6.conf.all.forwarding=1
+EOF";
+    }
 
 
     ######################################################################
-    ## network bridge
-    #bridge#sudo iptables -t nat --list | grep -q MASQUERADE 2> /dev/null || {
-    #bridge#echo -e "\e[36m    setup iptables for bridging\e[0m";
-    #bridge#sudo iptables -t nat -A POSTROUTING -o eth0 -j MASQUERADE
-    #bridge#sudo dpkg-reconfigure iptables-persistent
-    #bridge#}
+    ## network nat
+    sudo iptables -t nat --list | grep -q MASQUERADE 2> /dev/null || {
+    echo -e "\e[36m    setup iptables for nat\e[0m";
+    sudo iptables -t nat -A POSTROUTING -o $INTERFACE_ETH0 -j MASQUERADE
+    sudo dpkg-reconfigure --unseen-only iptables-persistent
+    }
+
+
+    ######################################################################
+    ## chrony
+    grep -q mod_install_server /etc/chrony/chrony.conf 2> /dev/null || {
+    echo -e "\e[36m    setup chrony\e[0m";
+    sudo sh -c "cat << EOF  > /etc/chrony/chrony.conf
+########################################
+## mod_install_server
+allow
+
+#server  stratum1.domain.local  iburst  minpoll 5  maxpoll 5
+server  ptbtime1.ptb.de  iburst
+server  ptbtime2.ptb.de  iburst
+server  ptbtime3.ptb.de  iburst
+server  ntp1.oma.be  iburst
+server  ntp2.oma.be  iburst
+server  ntp.certum.pl  iburst
+server  ntp1.sp.se  iburst
+server  ntp2.sp.se  iburst
+
+server  char-ntp-pool.charite.de
+server  isis.uni-paderborn.de
+
+pool  $CUSTOM_LANG.pool.ntp.org  iburst
+
+keyfile /etc/chrony/chrony.keys
+driftfile /var/lib/chrony/chrony.drift
+logdir /var/log/chrony
+maxupdateskew 100.0
+hwclockfile /etc/adjtime
+rtcsync
+makestep 1 3
+EOF";
+    }
+
 }
 
 
-######################################################################
-######################################################################
-######################################################################
-######################################################################
-
-
-######################################################################
+##########################################################################
 sudo mkdir -p $DST_ISO;
 sudo mkdir -p $DST_IMG;
 sudo mkdir -p $DST_TFTP_ETH0;
@@ -1784,12 +2345,13 @@ if [ -d "/var/www/html" ]; then
     [ -h "/var/www/html$NFS_ETH0" ] || sudo ln -s $DST_NFS_ETH0 /var/www/html$NFS_ETH0;
 fi
 
-######################################################################
-handle_dnsmasq
-handle_samba
-handle_optional
-handle_dhcpcd
-handle_chrony
+
+##########################################################################
+handle_hostapd;
+handle_dhcpcd;
+handle_dnsmasq;
+handle_samba;
+handle_optional;
 
 
 ##########################################################################
@@ -1810,63 +2372,69 @@ handle_chrony
 ##  if you want to delete the entire iso and its nfs export to free disk space
 ##########################################################################
 ##########################################################################
-##handle_iso  $WIN_PE_X86  $WIN_PE_X86_URL;
+#handle_iso  $WIN_PE_X86  $WIN_PE_X86_URL;
 _unhandle_iso  $UBUNTU_LTS_X64  $UBUNTU_LTS_X64_URL;
 _unhandle_iso  $UBUNTU_LTS_X86  $UBUNTU_LTS_X86_URL;
 handle_iso  $UBUNTU_X64  $UBUNTU_X64_URL;
-_unhandle_iso  $UBUNTU_DAILY_X64  $UBUNTU_DAILY_X64_URL  timestamping;
-_unhandle_iso  $UBUNTU_STUDIO_X64  $UBUNTU_STUDIO_X64_URL;
+handle_iso  $UBUNTU_DAILY_X64  $UBUNTU_DAILY_X64_URL  timestamping;
+handle_iso  $UBUNTU_STUDIO_X64  $UBUNTU_STUDIO_X64_URL;
 _unhandle_iso  $UBUNTU_STUDIO_DAILY_X64  $UBUNTU_STUDIO_DAILY_X64_URL  timestamping;
 _unhandle_iso  $LUBUNTU_LTS_X64  $LUBUNTU_LTS_X64_URL;
 _unhandle_iso  $LUBUNTU_LTS_X86  $LUBUNTU_LTS_X86_URL;
-_unhandle_iso  $LUBUNTU_X64  $LUBUNTU_X64_URL;
+handle_iso  $LUBUNTU_X64  $LUBUNTU_X64_URL;
 _unhandle_iso  $LUBUNTU_X86  $LUBUNTU_X86_URL;
 _unhandle_iso  $LUBUNTU_DAILY_X64  $LUBUNTU_DAILY_X64_URL  timestamping;
-##handle_iso  $UBUNTU_NONPAE  $UBUNTU_NONPAE_URL;
-handle_iso  $DEBIAN_X64  $DEBIAN_X64_URL;
+_unhandle_iso  $UBUNTU_NONPAE  $UBUNTU_NONPAE_URL;
+_unhandle_iso  $DEBIAN_X64  $DEBIAN_X64_URL;
 _unhandle_iso  $DEBIAN_X86  $DEBIAN_X86_URL;
 _unhandle_iso  $DEVUAN_X64  $DEVUAN_X64_URL;
 _unhandle_iso  $DEVUAN_X86  $DEVUAN_X86_URL;
 _unhandle_iso  $PARROT_LITE_X64  $PARROT_LITE_X64_URL;
 _unhandle_iso  $PARROT_LITE_X86  $PARROT_LITE_X86_URL;
-_unhandle_iso  $PARROT_FULL_X64  $PARROT_FULL_X64_URL;
+handle_iso  $PARROT_FULL_X64  $PARROT_FULL_X64_URL;
 _unhandle_iso  $PARROT_FULL_X86  $PARROT_FULL_X86_URL;
 _unhandle_iso  $GNURADIO_X64  $GNURADIO_X64_URL;
 _unhandle_iso  $DEFT_X64  $DEFT_X64_URL;
 _unhandle_iso  $DEFTZ_X64  $DEFTZ_X64_URL  ,gid=root,uid=root,norock,mode=292;
-_unhandle_iso  $KALI_X64  $KALI_X64_URL;
-_unhandle_iso  $PENTOO_X64  $PENTOO_X64_URL  timestamping;
-_unhandle_iso  $PENTOO_BETA_X64  $PENTOO_BETA_X64_URL  timestamping;
-_unhandle_iso  $SYSTEMRESCUE_X86  $SYSTEMRESCUE_X86_URL;
-##handle_iso  $DESINFECT_X86  $DESINFECT_X86_URL;
+handle_iso  $KALI_X64  $KALI_X64_URL;
+handle_iso  $PENTOO_X64  $PENTOO_X64_URL  timestamping;
+handle_iso  $PENTOO_BETA_X64  $PENTOO_BETA_X64_URL  timestamping;
+handle_iso  $SYSTEMRESCUE_X86  $SYSTEMRESCUE_X86_URL;
+#handle_iso  $DESINFECT_X64  $DESINFECT_X64_URL;
+#handle_iso  $DESINFECT_X86  $DESINFECT_X86_URL;
 _unhandle_iso  $TINYCORE_x64  $TINYCORE_x64_URL  timestamping;
 _unhandle_iso  $TINYCORE_x86  $TINYCORE_x86_URL  timestamping;
-handle_iso  $RPDESKTOP_X86  $RPDESKTOP_X86_URL  timestamping;
+_unhandle_iso  $RPDESKTOP_X86  $RPDESKTOP_X86_URL  timestamping;
 _unhandle_iso  $CLONEZILLA_X64  $CLONEZILLA_X64_URL;
-_unhandle_iso  $CLONEZILLA_X86  $CLONEZILLA_X86_URL;
-_unhandle_iso  $FEDORA_X64  $FEDORA_X64_URL;
-######################################################################
-handle_pxe
+handle_iso  $CLONEZILLA_X86  $CLONEZILLA_X86_URL;
+handle_iso  $FEDORA_X64  $FEDORA_X64_URL;
+_unhandle_iso  $OPENSUSE_X64  $OPENSUSE_X64_URL  timestamping  ,gid=root,uid=root,norock,mode=292;
+_unhandle_iso  $OPENSUSE_RESCUE_X64  $OPENSUSE_RESCUE_X64_URL  timestamping  ,gid=root,uid=root,norock,mode=292;
+_unhandle_iso  $CENTOS_X64  $CENTOS_X64_URL;
+_unhandle_iso  $TAILS_X64  $TAILS_X64_URL;
+##########################################################################
+handle_pxe;
+handle_ipxe;
 
 
-######################################################################
-######################################################################
+##########################################################################
+##########################################################################
 ## comment out those entries,
-##  you dont want to download/mount/export
-######################################################################
-######################################################################
+##  you don't want to download, mount, export
+##########################################################################
+##########################################################################
 #handle_zip_img  $PI_CORE   $PI_CORE_URL;
-handle_zip_img  $RPD_LITE  $RPD_LITE_URL  timestamping;
-#handle_zip_img  $RPD_FULL  $RPD_FULL_URL  timestamping;
-######################################################################
-######################################################################
+#handle_zip_img  $RPD_LITE  $RPD_LITE_URL  timestamping;
+handle_zip_img  $RPD_FULL  $RPD_FULL_URL  timestamping;
+##########################################################################
+##########################################################################
 ## comment out those entries,
-##  you dont want to have as RPi3 network booting
-######################################################################
-######################################################################
-#handle_network_booting  $PI_CORE  bootcode,config
-handle_network_booting  $RPD_LITE  bootcode,cmdline,config,ssh,root,fstab,wpa,history
-#handle_network_booting  $RPD_FULL  bootcode,cmdline,config,ssh,root,fstab,wpa,history
+##  you don't want to have as pi 3 pxe network booting
+##########################################################################
+##########################################################################
+#handle_rpi_pxe  $PI_CORE  $RPI_SN0  bootcode,config,root;
+#handle_rpi_pxe  $RPD_LITE  $RPI_SN0  bootcode,cmdline,config,ssh,root,fstab,wpa,history,apt;
+handle_rpi_pxe  $RPD_FULL  $RPI_SN0  bootcode,cmdline,config,ssh,root,fstab,wpa,history,apt;
 
 
 #      #              #              #              #              #
@@ -1878,7 +2446,7 @@ handle_network_booting  $RPD_LITE  bootcode,cmdline,config,ssh,root,fstab,wpa,hi
 ##########################################################################
 
 
-######################################################################
+##########################################################################
 if [ -d "$SRC_ISO" ]; then
     echo -e "\e[32mbackup new iso images to usb-stick\e[0m";
     sudo rsync -xa --info=progress2 $DST_ISO/*.iso $DST_ISO/*.url  $SRC_ISO/
@@ -1888,7 +2456,7 @@ if [ -d "$SRC_IMG" ]; then
     echo -e "\e[32mbackup new images to usb-stick\e[0m";
     sudo rsync -xa --info=progress2 $DST_IMG/*.img $DST_IMG/*.url  $SRC_IMG/
 fi
-######################################################################
+##########################################################################
 sync
 echo -e "\e[32mDone.\e[0m";
 echo -e "\e[1;31mPlease reboot\e[0m";
